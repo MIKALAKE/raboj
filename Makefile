@@ -66,7 +66,7 @@ dmg: verify
 	cp -R "$(APP)" "$(BUILD_DIR)/dmg/"
 	ln -s /Applications "$(BUILD_DIR)/dmg/Applications"
 	hdiutil create -volname "Răboj $(VERSION)" -srcfolder "$(BUILD_DIR)/dmg" -ov -format UDZO "$(DMG)"
-	shasum -a 256 "$(DMG)" | tee "$(DMG).sha256"
+	cd "$(BUILD_DIR)" && shasum -a 256 "$(notdir $(DMG))" | tee "$(notdir $(DMG)).sha256"
 
 clean:
 	rm -rf $(BUILD_DIR) .build
