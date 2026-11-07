@@ -9,12 +9,13 @@ let package = Package(
         .library(name: "RabojCore", targets: ["RabojCore"]),
     ],
     targets: [
-        // Pure logic: providers, accounts, log parsing, aggregation. No UI, no I/O side effects beyond reading.
+        // Pure logic: providers, accounts, log parsing, aggregation, API clients. No UI.
         .target(name: "RabojCore"),
-        // The menu bar app.
+        // The menu bar app (AppKit + SwiftUI). Swift 5 language mode keeps AppKit glue simple.
         .executableTarget(
             name: "Raboj",
-            dependencies: ["RabojCore"]
+            dependencies: ["RabojCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
             name: "RabojCoreTests",

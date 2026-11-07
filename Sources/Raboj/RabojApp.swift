@@ -1,35 +1,38 @@
-import RabojCore
-import SwiftUI
+import AppKit
 
 @main
-struct RabojApp: App {
-    var body: some Scene {
-        MenuBarExtra {
-            PopoverPlaceholder()
-        } label: {
-            Image(systemName: "chart.bar.fill")
-                .accessibilityLabel("Răboj")
+enum RabojMain {
+    /// Kept alive for the whole run; NSApplication holds its delegate weakly.
+    private static var delegate: AppDelegate?
+
+    static func main() {
+        let arguments = CommandLine.arguments
+        if let index = arguments.firstIndex(of: "--report") {
+            Report.run(Array(arguments.dropFirst(index + 1)))
+            return
         }
-        .menuBarExtraStyle(.window)
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        Self.delegate = delegate
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
     }
 }
 
-/// Temporary content until the real popover lands (milestone M3).
-private struct PopoverPlaceholder: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Răboj")
-                .font(.headline)
-            Text("Supported providers: \(Provider.allCases.map(\.displayName).joined(separator: ", "))")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Divider()
-            Button("Quit Răboj") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var model: AppModel?
+    private var statusItem: StatusItemController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let model = AppModel()
+        self.model = model
+        WindowCoordinator.shared.model = model
+        statusItem = StatusItemController(model: model)
+        model.start()
+        if model.accounts.isEmpty {
+            WindowCoordinator.shared.openAddAccount()
         }
-        .padding(14)
-        .frame(width: 300, alignment: .leading)
     }
 }

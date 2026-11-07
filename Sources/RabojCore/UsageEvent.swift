@@ -117,7 +117,7 @@ extension Data {
     /// Calls `body` for every complete, non-empty line. Bytes after the last newline are not passed.
     /// Returns how many bytes were consumed (up to and including the last newline).
     @discardableResult
-    func forEachCompleteLine(_ body: (Data) -> Void) -> Int {
+    public func forEachCompleteLine(_ body: (Data) -> Void) -> Int {
         var start = startIndex
         var consumedEnd = startIndex
         while let newline = self[start...].firstIndex(of: 0x0A) {

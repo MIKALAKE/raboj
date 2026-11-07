@@ -9,15 +9,20 @@ APPDIR      ?= $(HOME)/Applications
 VERSION     := $(shell /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)
 DMG         := $(BUILD_DIR)/$(APP_NAME)-$(VERSION).dmg
 
-.PHONY: all build test app verify run install uninstall dmg clean
+.PHONY: all build test lint app verify run install uninstall dmg clean
 
 all: app
 
-build:
+build: lint
 	swift build -c $(CONFIG)
 
 test:
 	swift test
+
+# SwiftUI's @State is a macro whose plugin ships only with full Xcode. Răboj must build with the
+# Command Line Tools alone (Homebrew builds from source), so use @StateObject + ObservableObject instead.
+lint:
+	@! grep -rn --include='*.swift' -E '@State[[:space:]]' Sources || { echo "FAIL: @State needs Xcode's SwiftUI macros; use @StateObject"; exit 1; }
 
 # Assemble a real .app bundle around the SwiftPM executable and sign it ad hoc with our entitlements.
 app: build
