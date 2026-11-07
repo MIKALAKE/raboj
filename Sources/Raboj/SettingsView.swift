@@ -62,7 +62,7 @@ private struct AccountsTab: View {
                 List(selection: $selected) {
                     ForEach(model.accounts) { account in
                         HStack(spacing: 8) {
-                            Circle().fill(Color(nsColor: account.color.nsColor)).frame(width: 10, height: 10)
+                            Circle().fill(Color(nsColor: account.nsColor)).frame(width: 10, height: 10)
                             ProviderLogoView(provider: account.provider, size: 16)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(account.label).fontWeight(.semibold)
@@ -128,7 +128,7 @@ private struct AccountEditor: View {
         Form {
             Section {
                 TextField("Name", text: $state.account.label)
-                LabeledContent("Color") { ColorSwatchPicker(selection: $state.account.color) }
+                LabeledContent("Color") { ColorSwatchPicker(selection: $state.account.color, custom: $state.account.customColorHex) }
                 LabeledContent("Provider") {
                     HStack(spacing: 6) {
                         ProviderLogoView(provider: account.provider, size: 16)
@@ -199,29 +199,60 @@ private struct AccountEditor: View {
     }
 
     private var claudeLimitsSection: some View {
-        Section("Plan limits (Pro, Max, Ultra)") {
-            Text("Claude Code passes your 5-hour and weekly limits to its status line. Add this to the settings.json in this folder and Răboj shows them after your next message. It replaces any status line you already have.")
+        let file = model.settingsFile(for: account)
+        let current = file.flatMap { try? Data(contentsOf: $0) }
+        let setupState = ClaudeStatusLineSetup.state(of: current)
+        let plan = model.ledger(account.id).plan
+        return Section("Session and weekly limits (Pro, Max, Ultra)") {
+            Text("Claude Code hands these numbers (the ones in /usage) to its status line. Add Răboj’s one-line status line to this folder’s settings.json and they appear here after your next message.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(ClaudeStatusLineSetup.settingsSnippet)
-                .font(.caption.monospaced())
-                .textSelection(.enabled)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
-            HStack {
-                Button(state.copied ? "Copied" : "Copy") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(ClaudeStatusLineSetup.settingsSnippet, forType: .string)
-                    state.copied = true
+
+            switch setupState {
+            case .setUp:
+                Label(plan == nil ? "Set up. Waiting for your next message in Claude Code." : "Set up. Last update \(plan!.capturedAt.formatted(date: .abbreviated, time: .shortened)).", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            case .otherStatusLine(let command):
+                Label("You already use a status line (\(command.prefix(40))…). Setting up Răboj replaces it.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            case .missingFile:
+                Label("This folder has no settings.json yet. Create it with the copied text.", systemImage: "info.circle")
+            case .notSetUp:
+                Label("Not set up yet.", systemImage: "circle.dashed")
+            }
+
+            if setupState != .setUp {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("1. Copy the updated settings.json (your other settings are kept).")
+                    Text("2. Open settings.json, select all, paste, save.")
+                    Text("3. Send any message in Claude Code with this account.")
                 }
-                Spacer()
-                if let plan = model.ledger(account.id).plan {
-                    Text("Last received \(plan.capturedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Text("Not received yet").font(.caption).foregroundStyle(.secondary)
+                .font(.caption)
+                HStack {
+                    Button(state.copied ? "Copied" : "Copy Updated settings.json") {
+                        let text = ClaudeStatusLineSetup.mergedSettings(current) ?? "{\n\(ClaudeStatusLineSetup.settingsSnippet)\n}\n"
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                        state.copied = true
+                    }
+                    if let file {
+                        if setupState == .missingFile {
+                            Button("Show Folder") { NSWorkspace.shared.activateFileViewerSelecting([file.deletingLastPathComponent()]) }
+                        } else {
+                            Button("Open settings.json") { NSWorkspace.shared.open(file) }
+                        }
+                    }
                 }
+                DisclosureGroup("Or paste just the status line block") {
+                    Text(ClaudeStatusLineSetup.settingsSnippet)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
+                }
+                .font(.caption)
             }
         }
     }

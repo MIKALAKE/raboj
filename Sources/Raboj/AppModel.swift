@@ -21,6 +21,28 @@ enum MenuBarMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// What the All view and the menu bar show for each account.
+enum AllMetric: String, Codable, CaseIterable, Identifiable {
+    case auto, tokens, limits, cost, requests
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .auto: "Auto"
+        case .tokens: "Tokens"
+        case .limits: "Limits"
+        case .cost: "Cost"
+        case .requests: "Requests"
+        }
+    }
+}
+
+/// One account's number for a metric, with how full its bar is and a short explanation.
+struct MetricValue {
+    var text: String
+    var fraction: Double?
+    var note: String
+}
+
 struct AccountStatus {
     var lastUpdated: Date?
     var error: String?
@@ -32,6 +54,7 @@ private struct StoredState: Codable {
     var selection: Selection = .all
     var period: Period = .today
     var menuBarMode: MenuBarMode = .selection
+    var allMetric: AllMetric? = .auto
 }
 
 /// Owns accounts, reads their usage on a schedule and exposes everything the UI shows.
@@ -45,6 +68,7 @@ final class AppModel: ObservableObject {
     @Published var selection: Selection = .all { didSet { save() } }
     @Published var period: Period = .today { didSet { save() } }
     @Published var menuBarMode: MenuBarMode = .selection { didSet { save() } }
+    @Published var allMetric: AllMetric = .auto { didSet { save() } }
 
     private var readers: [UUID: FolderReader] = [:]
     private var lastAPIFetch: [UUID: Date] = [:]
@@ -188,6 +212,11 @@ final class AppModel: ObservableObject {
 
     var nextColor: AccountColor { AccountColor.next(after: accounts.map(\.color)) }
 
+    /// Claude Code's settings.json in the account's folder (readable through the folder grant).
+    func settingsFile(for account: Account) -> URL? {
+        readers[account.id]?.root.appendingPathComponent("settings.json")
+    }
+
     func add(_ account: Account, apiKey: String?) {
         add([account], apiKey: apiKey)
     }
@@ -281,6 +310,46 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Metrics that make sense for the accounts that exist (Requests only when some provider counts requests).
+    var availableMetrics: [AllMetric] {
+        AllMetric.allCases.filter { metric in
+            metric != .requests || accounts.contains { $0.provider.headline == .requests }
+        }
+    }
+
+    /// The account's number for a metric; text is "—" when the provider has no such data.
+    func value(_ account: Account, metric: AllMetric) -> MetricValue {
+        let ledger = ledger(account.id)
+        let today = ledger.summary(.today, now: now)
+        switch metric {
+        case .auto:
+            return MetricValue(text: headline(account), fraction: autoFraction(account), note: "")
+        case .tokens:
+            return today.tokens.total > 0 || account.provider.headline == .tokens
+                ? MetricValue(text: Format.tokens(today.tokens.total), fraction: nil, note: "tokens today")
+                : MetricValue(text: "—", fraction: nil, note: "\(account.provider.displayName) doesn’t report tokens")
+        case .limits:
+            if let window = ledger.plan?.activeWindows(now: now).max(by: { $0.usedPercent < $1.usedPercent }) {
+                let reset = window.resetsAt.map { " · resets in \(Format.countdown(to: $0, now: now))" } ?? ""
+                return MetricValue(text: Format.percent(window.usedPercent), fraction: window.usedPercent / 100, note: window.title + reset)
+            }
+            let hint = account.provider == .claudeCode ? "Set up limits in Settings › Accounts" : "No plan limits from this provider"
+            return MetricValue(text: "—", fraction: nil, note: hint)
+        case .cost:
+            if let cost = today.cost { return MetricValue(text: Format.usd(cost), fraction: nil, note: "billed today") }
+            if account.provider.headline == .balance, let first = ledger.info.first { return MetricValue(text: first.value, fraction: nil, note: first.title) }
+            return MetricValue(text: "—", fraction: nil, note: "\(account.provider.displayName) doesn’t report cost")
+        case .requests:
+            return account.provider.headline == .requests
+                ? MetricValue(text: "\(today.requests)", fraction: nil, note: "requests today")
+                : MetricValue(text: "—", fraction: nil, note: "\(account.provider.displayName) doesn’t count requests")
+        }
+    }
+
+    private func autoFraction(_ account: Account) -> Double? {
+        ledger(account.id).plan?.activeWindows(now: now).map(\.usedPercent).max().map { $0 / 100 }
+    }
+
     // MARK: - Launch at login
 
     var launchAtLogin: Bool {
@@ -310,12 +379,13 @@ final class AppModel: ObservableObject {
         selection = state.selection
         period = state.period
         menuBarMode = state.menuBarMode
+        allMetric = state.allMetric ?? .auto
         if case .account(let id) = selection, account(id) == nil { selection = .all }
     }
 
     private func save() {
         guard loaded else { return }
-        let state = StoredState(accounts: accounts, selection: selection, period: period, menuBarMode: menuBarMode)
+        let state = StoredState(accounts: accounts, selection: selection, period: period, menuBarMode: menuBarMode, allMetric: allMetric)
         do {
             try FileManager.default.createDirectory(at: Self.stateURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(state).write(to: Self.stateURL, options: .atomic)

@@ -192,6 +192,8 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
     public var refreshMinutes: Int
     /// Extra identifier a provider needs (xAI team ID).
     public var extraID: String?
+    /// A color picked freely (0xRRGGBB); overrides `color` when set.
+    public var customColorHex: UInt32?
 
     public init(
         id: UUID = UUID(),
@@ -218,9 +220,10 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-/// Account colors, chosen so neighbours also differ in lightness (readable for color-blind users).
+/// Preset account colors, ordered so neighbours also differ in lightness (readable for color-blind users).
+/// Any other color can be chosen per account with `Account.customColorHex`.
 public enum AccountColor: String, Codable, CaseIterable, Sendable {
-    case blue, orange, teal, purple, graphite, pink
+    case blue, orange, teal, purple, graphite, pink, green, red, amber, indigo, cyan, brown
 
     /// The next color not used yet by `existing`, cycling when all are taken.
     public static func next(after existing: [AccountColor]) -> AccountColor {

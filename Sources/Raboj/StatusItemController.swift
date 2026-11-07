@@ -10,7 +10,7 @@ extension Notification.Name {
 /// The menu bar item: number(s) with account-colored dots, a popover on click,
 /// ⌥-click to cycle accounts, right-click (or ⌃-click) for a menu.
 @MainActor
-final class StatusItemController: NSObject {
+final class StatusItemController: NSObject, NSPopoverDelegate {
     private let model: AppModel
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
@@ -23,6 +23,7 @@ final class StatusItemController: NSObject {
 
         popover.behavior = .transient
         popover.animates = false
+        popover.delegate = self
         let host = NSHostingController(rootView: PopoverView().environmentObject(model))
         host.sizingOptions = [.preferredContentSize]
         popover.contentViewController = host
@@ -82,8 +83,14 @@ final class StatusItemController: NSObject {
     @objc private func refresh() { model.refreshAll() }
     @objc private func settings() { WindowCoordinator.shared.openSettings() }
 
+    /// Changing the title while the popover is open would resize the item and drag the popover sideways,
+    /// so the title waits until the popover closes.
+    func popoverDidClose(_ notification: Notification) {
+        updateTitle()
+    }
+
     private func updateTitle() {
-        guard let button = item.button else { return }
+        guard let button = item.button, !popover.isShown else { return }
         let parts = titleParts()
         guard !parts.isEmpty else {
             button.attributedTitle = NSAttributedString(string: "")
@@ -103,7 +110,8 @@ final class StatusItemController: NSObject {
     }
 
     private func titleParts() -> [(color: NSColor, text: String)] {
-        let part: (Account) -> (NSColor, String) = { ($0.color.nsColor, self.model.headline($0)) }
+        let part: (Account) -> (NSColor, String) = { ($0.nsColor, self.model.value($0, metric: self.model.allMetric).text) }
+        let single: (Account) -> (NSColor, String) = { ($0.nsColor, self.model.headline($0)) }
         switch model.menuBarMode {
         case .iconOnly:
             return []
@@ -111,7 +119,7 @@ final class StatusItemController: NSObject {
             let pinned = model.accounts.filter(\.pinnedInMenuBar)
             return (pinned.isEmpty ? Array(model.accounts.prefix(3)) : pinned).map(part)
         case .selection:
-            if case .account(let id) = model.selection, let account = model.account(id) { return [part(account)] }
+            if case .account(let id) = model.selection, let account = model.account(id) { return [single(account)] }
             let pinned = model.accounts.filter(\.pinnedInMenuBar)
             return (pinned.isEmpty ? Array(model.accounts.filter(\.includeInAll).prefix(3)) : pinned).map(part)
         }
@@ -134,7 +142,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     func openAddAccount() {
         guard let model else { return }
-        show(id: "add", title: "Add an Account", size: NSSize(width: 440, height: 560)) {
+        show(id: "add", title: "Add an Account", size: NSSize(width: 520, height: 640)) {
             AddAccountView(onDone: { [weak self] in self?.close("add") }).environmentObject(model)
         }
     }

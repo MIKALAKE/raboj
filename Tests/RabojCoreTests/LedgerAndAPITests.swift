@@ -58,16 +58,16 @@ private func event(_ key: String, _ time: String, tokens: Int, model: String = "
         #expect(days.first?.day == date("2026-11-01T00:00:00Z"))
     }
 
-    @Test func fiveHourWindowStartsOnTheHourOfTheFirstMessage() throws {
+    @Test func fiveHourWindowStartsAtTheFirstMessage() throws {
         var ledger = UsageLedger()
         ledger.merge([
-            event("a", "2026-11-07T08:10:00Z", tokens: 1), // window 08:00–13:00, over by 16:00
-            event("b", "2026-11-07T14:20:00Z", tokens: 2), // new window 14:00–19:00
+            event("a", "2026-11-07T08:10:00Z", tokens: 1), // window 08:10–13:10, over by 16:00
+            event("b", "2026-11-07T14:20:00Z", tokens: 2), // new window 14:20–19:20
             event("c", "2026-11-07T15:50:00Z", tokens: 3),
         ])
         let window = try #require(ledger.currentWindow(now: now, calendar: utc))
-        #expect(window.start == date("2026-11-07T14:00:00Z"))
-        #expect(window.end == date("2026-11-07T19:00:00Z"))
+        #expect(window.start == date("2026-11-07T14:20:00Z"))
+        #expect(window.end == date("2026-11-07T19:20:00Z"))
         #expect(window.tokens == 5)
         #expect(ledger.currentWindow(now: date("2026-11-07T19:30:00Z"), calendar: utc) == nil)
     }

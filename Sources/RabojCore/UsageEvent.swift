@@ -77,12 +77,39 @@ public struct PlanWindow: Hashable, Sendable, Identifiable {
     /// 0–100, may exceed 100 when the limit is passed.
     public var usedPercent: Double
     public var resetsAt: Date?
+    /// Length of the window, when known (5 hours, 7 days…). Needed to estimate the pace.
+    public var length: TimeInterval?
 
-    public init(id: String, title: String, usedPercent: Double, resetsAt: Date?) {
+    public init(id: String, title: String, usedPercent: Double, resetsAt: Date?, length: TimeInterval? = nil) {
         self.id = id
         self.title = title
         self.usedPercent = usedPercent
         self.resetsAt = resetsAt
+        self.length = length
+    }
+
+    /// Where usage is heading if it continues at the same rate until the window resets.
+    public enum Pace: Hashable, Sendable {
+        /// Expected to end the window at this percent (below 100).
+        case onTrack(projectedPercent: Double)
+        /// Expected to reach 100% at this moment, before the reset.
+        case willHitLimit(at: Date)
+        /// Already at or over the limit.
+        case limitReached
+    }
+
+    /// Linear projection from the share of the window already elapsed. Nil when too early to tell.
+    public func pace(now: Date) -> Pace? {
+        if usedPercent >= 100 { return .limitReached }
+        guard let resetsAt, let length, length > 0 else { return nil }
+        let start = resetsAt.addingTimeInterval(-length)
+        let elapsed = now.timeIntervalSince(start)
+        // Early in a window a single burst says little about the pace.
+        guard elapsed >= length * 0.05, elapsed < length, usedPercent > 0 else { return usedPercent == 0 ? .onTrack(projectedPercent: 0) : nil }
+        let rate = usedPercent / elapsed
+        let projected = usedPercent + rate * resetsAt.timeIntervalSince(now)
+        if projected < 100 { return .onTrack(projectedPercent: projected) }
+        return .willHitLimit(at: now.addingTimeInterval((100 - usedPercent) / rate))
     }
 }
 

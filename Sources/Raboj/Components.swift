@@ -41,28 +41,38 @@ private struct LogoShape: Shape {
     }
 }
 
-/// Row of colored circles; the selected one gets a ring. Replaces a menu picker, whose items lose their color.
+/// Preset color circles plus a free color picker. Replaces a menu picker, whose items lose their color.
 struct ColorSwatchPicker: View {
     @Binding var selection: AccountColor
+    @Binding var custom: UInt32?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             ForEach(AccountColor.allCases, id: \.self) { option in
+                let isOn = custom == nil && selection == option
                 Button {
                     selection = option
+                    custom = nil
                 } label: {
                     Circle()
                         .fill(Color(nsColor: option.nsColor))
-                        .frame(width: 20, height: 20)
+                        .frame(width: 16, height: 16)
                         .padding(3)
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(selection == option ? 0.85 : 0), lineWidth: 2))
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(isOn ? 0.85 : 0), lineWidth: 2))
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .help(option.title)
                 .accessibilityLabel(option.title)
-                .accessibilityAddTraits(selection == option ? .isSelected : [])
+                .accessibilityAddTraits(isOn ? .isSelected : [])
             }
+            ColorPicker("Custom color", selection: Binding(
+                get: { Color(nsColor: custom.map { NSColor(hex: $0) } ?? selection.nsColor) },
+                set: { custom = NSColor($0).hexValue }
+            ), supportsOpacity: false)
+            .labelsHidden()
+            .help("Any color")
+            .overlay(Circle().strokeBorder(Color.primary.opacity(custom != nil ? 0.85 : 0), lineWidth: 2).padding(-3).allowsHitTesting(false))
         }
     }
 }

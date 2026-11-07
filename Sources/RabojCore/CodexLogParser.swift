@@ -97,7 +97,8 @@ public final class CodexSessionParser {
                 id: key,
                 title: minutes.map(PlanSnapshot.title(forWindowMinutes:)) ?? "Plan limit",
                 usedPercent: used,
-                resetsAt: resets
+                resetsAt: resets,
+                length: minutes.map { TimeInterval($0 * 60) }
             ))
         }
         guard !windows.isEmpty else { return nil }

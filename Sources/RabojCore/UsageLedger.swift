@@ -48,8 +48,8 @@ public struct DayTotal: Hashable, Sendable, Identifiable {
     public var requests: Int
 }
 
-/// Claude's usage window: starts at the first message (rounded down to the hour) and lasts five hours.
-/// This is an estimate from local activity; real limits come from the provider when available.
+/// A five-hour window estimated from this Mac's logs only: it starts at the first local message.
+/// The real plan window also counts other devices and apps, so the real limits (status line) win when available.
 public struct WindowEstimate: Hashable, Sendable {
     public var start: Date
     public var end: Date
@@ -172,8 +172,7 @@ public struct UsageLedger: Sendable {
             if let start = windowStart, event.timestamp < start.addingTimeInterval(length) {
                 windowTokens += event.tokens.total
             } else {
-                let hour = calendar.dateInterval(of: .hour, for: event.timestamp)?.start ?? event.timestamp
-                windowStart = hour
+                windowStart = event.timestamp
                 windowTokens = event.tokens.total
             }
         }

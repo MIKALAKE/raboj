@@ -9,6 +9,7 @@ struct PendingFolder: Identifiable {
     var bookmark: Data?
     var label: String
     var color: AccountColor
+    var customColorHex: UInt32?
 }
 
 /// Form state for AddAccountView. An ObservableObject instead of `@State`, because `@State`
@@ -18,6 +19,7 @@ final class AddAccountForm: ObservableObject {
     @Published var folders: [PendingFolder] = []
     @Published var label = ""
     @Published var color: AccountColor = .blue
+    @Published var customColorHex: UInt32?
     @Published var apiKey = ""
     @Published var extraID = ""
     @Published var testing = false
@@ -44,7 +46,7 @@ struct AddAccountView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 460, minHeight: 560)
+        .frame(minWidth: 500, minHeight: 580)
     }
 
     // MARK: Step 1: provider
@@ -105,6 +107,7 @@ struct AddAccountView: View {
         form.skipped = []
         form.label = sameProvider == 0 ? provider.displayName : "\(provider.displayName) \(sameProvider + 1)"
         form.color = model.nextColor
+        form.customColorHex = nil
         form.apiKey = ""
         form.extraID = ""
         form.testResult = nil
@@ -162,12 +165,10 @@ struct AddAccountView: View {
                             .buttonStyle(.borderless)
                             .accessibilityLabel("Remove this folder")
                     }
-                    HStack {
-                        TextField("Name", text: $folder.label, prompt: Text("e.g. Work"))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 180)
-                        ColorSwatchPicker(selection: $folder.color)
-                    }
+                    TextField("Name", text: $folder.label, prompt: Text("e.g. Work"))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 220)
+                    ColorSwatchPicker(selection: $folder.color, custom: $folder.customColorHex)
                     if !FolderReader.looksValid(folder.url, for: provider) {
                         Label("No \(provider.logsSubfolder ?? "") folder inside. Usage may stay empty.", systemImage: "exclamationmark.triangle")
                             .font(.caption).foregroundStyle(.orange)
@@ -246,7 +247,7 @@ struct AddAccountView: View {
                 }
                 GridRow {
                     Text("Color")
-                    ColorSwatchPicker(selection: $form.color)
+                    ColorSwatchPicker(selection: $form.color, custom: $form.customColorHex)
                 }
                 if let extra = provider.extraFieldName {
                     GridRow {
@@ -316,8 +317,10 @@ struct AddAccountView: View {
     private func add(_ provider: Provider) {
         switch provider.connection {
         case .folder:
-            let accounts = form.folders.map { folder in
-                Account(provider: provider, label: folder.label.trimmingCharacters(in: .whitespaces), color: folder.color, folderPath: folder.url.path, folderBookmark: folder.bookmark)
+            let accounts = form.folders.map { folder -> Account in
+                var account = Account(provider: provider, label: folder.label.trimmingCharacters(in: .whitespaces), color: folder.color, folderPath: folder.url.path, folderBookmark: folder.bookmark)
+                account.customColorHex = folder.customColorHex
+                return account
             }
             model.add(accounts, apiKey: nil)
             onDone()
@@ -326,7 +329,8 @@ struct AddAccountView: View {
             }
         case .apiKey:
             let extra = form.extraID.trimmingCharacters(in: .whitespaces)
-            let account = Account(provider: provider, label: form.label.trimmingCharacters(in: .whitespaces), color: form.color, extraID: extra.isEmpty ? nil : extra)
+            var account = Account(provider: provider, label: form.label.trimmingCharacters(in: .whitespaces), color: form.color, extraID: extra.isEmpty ? nil : extra)
+            account.customColorHex = form.customColorHex
             model.add(account, apiKey: form.apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
             onDone()
         }

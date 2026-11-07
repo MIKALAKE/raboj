@@ -101,6 +101,12 @@ extension AccountColor {
         case .purple: (0x7C3AED, 0xA78BFA)
         case .graphite: (0x52525B, 0xA1A1AA)
         case .pink: (0xBE185D, 0xF472B6)
+        case .green: (0x15803D, 0x4ADE80)
+        case .red: (0xDC2626, 0xF87171)
+        case .amber: (0xCA8A04, 0xFACC15)
+        case .indigo: (0x4338CA, 0x818CF8)
+        case .cyan: (0x0891B2, 0x22D3EE)
+        case .brown: (0x92400E, 0xC2884A)
         }
         return NSColor(name: nil) { appearance in
             let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
@@ -111,7 +117,19 @@ extension AccountColor {
     var title: String { rawValue.capitalized }
 }
 
+extension Account {
+    /// The account's color: the custom one if picked, else the preset.
+    var nsColor: NSColor { customColorHex.map { NSColor(hex: $0) } ?? color.nsColor }
+}
+
 extension NSColor {
+    /// 0xRRGGBB in sRGB.
+    var hexValue: UInt32 {
+        let c = usingColorSpace(.sRGB) ?? self
+        func byte(_ v: CGFloat) -> UInt32 { UInt32(max(0, min(255, (v * 255).rounded()))) }
+        return byte(c.redComponent) << 16 | byte(c.greenComponent) << 8 | byte(c.blueComponent)
+    }
+
     convenience init(hex: UInt32) {
         self.init(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
     }

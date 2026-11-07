@@ -36,7 +36,8 @@ private func line(_ string: String) -> Data { Data(string.utf8) }
     @Test func parsesStatusLineLimits() throws {
         let json = #"{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}"#
         let plan = try #require(ClaudeCodeLogParser.parseLimits(line(json), capturedAt: Date(timeIntervalSince1970: 1_738_400_000)))
-        #expect(plan.windows.map(\.title) == ["5-hour limit", "Weekly limit"])
+        #expect(plan.windows.map(\.title) == ["Current session", "This week"])
+        #expect(plan.windows.map(\.length) == [18_000, 604_800])
         #expect(plan.windows[0].usedPercent == 23.5)
         #expect(plan.windows[0].resetsAt == Date(timeIntervalSince1970: 1_738_425_600))
         #expect(plan.activeWindows(now: Date(timeIntervalSince1970: 1_738_500_000)).map(\.id) == ["seven_day"])

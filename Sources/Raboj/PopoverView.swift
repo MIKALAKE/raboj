@@ -97,7 +97,7 @@ private struct AccountSwitcher: View {
             case .all: return ("All", .secondary, "All accounts")
             case .account(let id):
                 let account = model.account(id)
-                return (account?.label ?? "?", Color(nsColor: account?.color.nsColor ?? .gray), "\(account?.label ?? "") · \(account?.provider.displayName ?? "")")
+                return (account?.label ?? "?", Color(nsColor: account?.nsColor ?? .gray), "\(account?.label ?? "") · \(account?.provider.displayName ?? "")")
             }
         }()
         let button = Button {
@@ -134,6 +134,12 @@ private struct AllAccountsView: View {
                 Spacer()
                 Text("\(included.count) accounts").font(.caption).foregroundStyle(.secondary)
             }
+            Picker("Show", selection: $model.allMetric) {
+                ForEach(model.availableMetrics) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("What each account shows here and in the menu bar")
             ForEach(included) { account in
                 Button { model.selection = .account(account.id) } label: { row(account) }
                     .buttonStyle(.plain)
@@ -143,15 +149,30 @@ private struct AllAccountsView: View {
 
     private var included: [Account] { model.accounts.filter(\.includeInAll) }
 
+    /// Number behind the bar, so bars compare accounts on the chosen metric.
+    private func amount(_ account: Account) -> Double {
+        let today = model.ledger(account.id).summary(.today, now: model.now)
+        switch model.allMetric {
+        case .auto, .tokens: return Double(today.tokens.total)
+        case .cost: return today.cost ?? 0
+        case .requests: return Double(today.requests)
+        case .limits: return 0
+        }
+    }
+
     private func row(_ account: Account) -> some View {
         let ledger = model.ledger(account.id)
-        let plan = ledger.plan?.activeWindows(now: model.now).max { $0.usedPercent < $1.usedPercent }
-        let today = ledger.summary(.today, now: model.now)
-        let maxTokens = included.map { model.ledger($0.id).summary(.today, now: model.now).tokens.total }.max() ?? 0
-        let fraction: Double = plan.map { $0.usedPercent / 100 } ?? (maxTokens > 0 ? Double(today.tokens.total) / Double(maxTokens) : 0)
+        let value = model.value(account, metric: model.allMetric)
+        let largest = included.map(amount).max() ?? 0
+        let relative = largest > 0 ? amount(account) / largest : 0
+        let fraction = value.fraction ?? (value.text == "—" ? 0 : relative)
         let note: String = {
             if let error = model.status(account.id).error { return error }
-            if let plan, let reset = plan.resetsAt { return "\(plan.title) · resets in \(Format.countdown(to: reset, now: model.now))" }
+            if model.allMetric != .auto { return value.note }
+            if let plan = ledger.plan?.activeWindows(now: model.now).max(by: { $0.usedPercent < $1.usedPercent }), let reset = plan.resetsAt {
+                return "\(plan.title) · resets in \(Format.countdown(to: reset, now: model.now))"
+            }
+            let today = ledger.summary(.today, now: model.now)
             switch account.provider.headline {
             case .cost: return "\(Format.usd(ledger.summary(.month, now: model.now).cost ?? 0)) in the last 30 days"
             case .requests: return "\(ledger.summary(.month, now: model.now).requests) requests in the last 30 days"
@@ -159,17 +180,17 @@ private struct AllAccountsView: View {
             case .tokens: return "\(Format.tokens(today.tokens.total)) tokens today"
             }
         }()
-        let color = Color(nsColor: account.color.nsColor)
+        let color = Color(nsColor: account.nsColor)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Circle().fill(color).frame(width: 9, height: 9)
                 ProviderLogoView(provider: account.provider, size: 14)
-                Text(account.label).fontWeight(.semibold)
-                Text(account.provider.displayName).font(.caption).foregroundStyle(.secondary)
+                Text(account.label).fontWeight(.semibold).lineLimit(1)
+                Text(account.provider.displayName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
-                Text(model.headline(account)).fontWeight(.bold)
+                Text(value.text).fontWeight(.bold).foregroundStyle(value.text == "—" ? Color.secondary : Color.primary)
             }
-            ProgressBar(fraction: fraction, color: color, height: 5)
+            ProgressBar(fraction: fraction, color: (value.fraction ?? 0) >= 0.9 ? .orange : color, height: 5)
             Text(note).font(.caption).foregroundStyle(model.status(account.id).error == nil ? Color.secondary : Color.orange).lineLimit(1)
         }
         .padding(10)
@@ -186,7 +207,7 @@ struct AccountDetailView: View {
     var body: some View {
         let ledger = model.ledger(account.id)
         let summary = ledger.summary(model.period, now: model.now)
-        let color = Color(nsColor: account.color.nsColor)
+        let color = Color(nsColor: account.nsColor)
         let status = model.status(account.id)
 
         VStack(alignment: .leading, spacing: 12) {
@@ -241,30 +262,26 @@ struct AccountDetailView: View {
                         Text(planSourceText(plan)).font(.caption2).foregroundStyle(.secondary)
                     }
                     ForEach(plan.activeWindows(now: model.now)) { window in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(window.title).font(.caption)
-                                Spacer()
-                                Text("\(Format.percent(window.usedPercent)) used").font(.caption.weight(.semibold))
-                                if let reset = window.resetsAt {
-                                    Text("· resets in \(Format.countdown(to: reset, now: model.now))").font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                            ProgressBar(fraction: window.usedPercent / 100, color: color, height: 7)
-                        }
+                        PlanWindowRow(window: window, color: color, now: model.now)
                     }
                 }
             } else if account.provider == .claudeCode {
+                Card {
+                    Text("See your session and weekly limits").font(.caption.weight(.semibold))
+                    Text("The same numbers as /usage in Claude Code. One-time setup: paste one line into Claude Code’s settings.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Set Up…") { WindowCoordinator.shared.openSettings(tab: .accounts, account: account.id) }
+                        .controlSize(.small)
+                }
                 if let window = ledger.currentWindow(now: model.now) {
                     Card {
-                        HStack { Text("Current 5-hour window").font(.caption.weight(.semibold)); Spacer(); Text("estimate from your logs").font(.caption2).foregroundStyle(.secondary) }
-                        ProgressBar(fraction: window.elapsedFraction(now: model.now), color: color, height: 6)
-                        Text("\(Format.tokens(window.tokens)) tokens · since \(window.start.formatted(date: .omitted, time: .shortened)), ends ~\(window.end.formatted(date: .omitted, time: .shortened))")
+                        HStack { Text("Activity on this Mac, last 5 hours").font(.caption.weight(.semibold)); Spacer(); Text("not your plan %").font(.caption2).foregroundStyle(.secondary) }
+                        Text("\(Format.tokens(window.tokens)) tokens since \(window.start.formatted(date: .omitted, time: .shortened)). Your plan also counts claude.ai, the desktop app and other devices, so its session can start earlier and its % differs.")
                             .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Button("Show real plan limits…") { WindowCoordinator.shared.openSettings(tab: .accounts, account: account.id) }
-                    .buttonStyle(.link).font(.caption)
             }
 
             if summary.tokens.total > 0 {
@@ -315,6 +332,62 @@ struct AccountDetailView: View {
 }
 
 // MARK: - Small building blocks
+
+/// One plan window, laid out like Claude Code's /usage: name, reset time, bar, percent and where it is heading.
+struct PlanWindowRow: View {
+    let window: PlanWindow
+    let color: Color
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(window.title).font(.callout.weight(.semibold))
+                Spacer()
+                Text("\(Format.percent(window.usedPercent)) used").font(.callout.weight(.semibold)).foregroundStyle(barColor)
+            }
+            ProgressBar(fraction: window.usedPercent / 100, color: barColor, height: 7)
+            HStack {
+                if let reset = window.resetsAt {
+                    Text("Resets \(Self.resetText(reset, now: now)) · in \(Format.countdown(to: reset, now: now))")
+                }
+                Spacer()
+                if let pace = paceText { Text(pace).foregroundStyle(paceIsBad ? Color.orange : Color.secondary) }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var pace: PlanWindow.Pace? { window.pace(now: now) }
+
+    private var paceIsBad: Bool {
+        switch pace {
+        case .willHitLimit, .limitReached: true
+        default: false
+        }
+    }
+
+    private var barColor: Color { paceIsBad || window.usedPercent >= 90 ? .orange : color }
+
+    private var paceText: String? {
+        switch pace {
+        case .onTrack(let projected): "On track · ~\(Format.percent(projected)) by reset"
+        case .willHitLimit(let at): "Limit around \(at.formatted(date: .omitted, time: .shortened))"
+        case .limitReached: "Limit reached"
+        case nil: nil
+        }
+    }
+
+    /// "at 03:30" today, "tomorrow at 01:00", else "Mon 01:00".
+    static func resetText(_ date: Date, now: Date) -> String {
+        let calendar = Calendar.current
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if calendar.isDate(date, inSameDayAs: now) { return "at \(time)" }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) { return "tomorrow at \(time)" }
+        return date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+}
 
 struct Card<Content: View>: View {
     @ViewBuilder var content: Content

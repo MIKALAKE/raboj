@@ -85,12 +85,13 @@ public enum ClaudeCodeLogParser {
         guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data),
               let limits = snapshot.rate_limits else { return nil }
         var windows: [PlanWindow] = []
-        func add(_ window: Snapshot.Limits.Window?, id: String, title: String) {
+        func add(_ window: Snapshot.Limits.Window?, id: String, title: String, length: TimeInterval) {
             guard let window, let used = window.used_percentage else { return }
-            windows.append(PlanWindow(id: id, title: title, usedPercent: used, resetsAt: window.resets_at.map { Date(timeIntervalSince1970: $0) }))
+            windows.append(PlanWindow(id: id, title: title, usedPercent: used, resetsAt: window.resets_at.map { Date(timeIntervalSince1970: $0) }, length: length))
         }
-        add(limits.five_hour, id: "five_hour", title: "5-hour limit")
-        add(limits.seven_day, id: "seven_day", title: "Weekly limit")
+        // Same names Claude Code uses in its /usage screen.
+        add(limits.five_hour, id: "five_hour", title: "Current session", length: 5 * 3_600)
+        add(limits.seven_day, id: "seven_day", title: "This week", length: 7 * 86_400)
         guard !windows.isEmpty else { return nil }
         return PlanSnapshot(windows: windows, capturedAt: capturedAt, source: "from Claude Code’s status line")
     }
@@ -100,6 +101,36 @@ public enum ClaudeCodeLogParser {
 /// It stores the JSON Claude Code passes on stdin next to the logs, in the folder the user already shared.
 public enum ClaudeStatusLineSetup {
     public static let command = #"f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/raboj-limits.json"; cat > "$f.tmp" && mv "$f.tmp" "$f""#
+
+    /// What `settings.json` in a Claude Code folder says about the status line.
+    public enum State: Equatable, Sendable {
+        case missingFile
+        case notSetUp
+        /// Another status line is configured; setting up Răboj replaces it.
+        case otherStatusLine(String)
+        case setUp
+    }
+
+    public static func state(of settings: Data?) -> State {
+        guard let settings else { return .missingFile }
+        guard let object = try? JSONSerialization.jsonObject(with: settings) as? [String: Any] else { return .notSetUp }
+        guard let statusLine = object["statusLine"] as? [String: Any] else { return .notSetUp }
+        let existing = statusLine["command"] as? String ?? ""
+        return existing.contains(ClaudeCodeLogParser.limitsFileName) ? .setUp : .otherStatusLine(existing)
+    }
+
+    /// The whole `settings.json` with Răboj's status line added, keeping every other setting.
+    /// Returns nil when the existing file is not a JSON object (then the user should paste the snippet by hand).
+    public static func mergedSettings(_ settings: Data?) -> String? {
+        var object: [String: Any] = [:]
+        if let settings, !settings.isEmpty {
+            guard let existing = try? JSONSerialization.jsonObject(with: settings) as? [String: Any] else { return nil }
+            object = existing
+        }
+        object["statusLine"] = ["type": "command", "command": command]
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) else { return nil }
+        return String(decoding: data, as: UTF8.self) + "\n"
+    }
 
     /// The `statusLine` block to paste into `settings.json`, JSON-escaped.
     public static var settingsSnippet: String {
