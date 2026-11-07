@@ -35,6 +35,7 @@ app: build
 	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
 	cp "$$(swift build $(SWIFT_FLAGS) --show-bin-path)/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
+	cp Resources/AppIcon.icns "$(APP)/Contents/Resources/AppIcon.icns"
 	codesign --force --sign - --options runtime \
 		--entitlements Resources/Raboj.entitlements "$(APP)"
 	@echo "Built $(APP)"

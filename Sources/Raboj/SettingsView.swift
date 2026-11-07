@@ -63,6 +63,7 @@ private struct AccountsTab: View {
                     ForEach(model.accounts) { account in
                         HStack(spacing: 8) {
                             Circle().fill(Color(nsColor: account.color.nsColor)).frame(width: 10, height: 10)
+                            ProviderLogoView(provider: account.provider, size: 16)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(account.label).fontWeight(.semibold)
                                 Text(account.provider.displayName).font(.caption).foregroundStyle(.secondary)
@@ -127,12 +128,13 @@ private struct AccountEditor: View {
         Form {
             Section {
                 TextField("Name", text: $state.account.label)
-                Picker("Color", selection: $state.account.color) {
-                    ForEach(AccountColor.allCases, id: \.self) { option in
-                        Label(option.title, systemImage: "circle.fill").foregroundStyle(Color(nsColor: option.nsColor)).tag(option)
+                LabeledContent("Color") { ColorSwatchPicker(selection: $state.account.color) }
+                LabeledContent("Provider") {
+                    HStack(spacing: 6) {
+                        ProviderLogoView(provider: account.provider, size: 16)
+                        Text(account.provider.displayName)
                     }
                 }
-                LabeledContent("Provider", value: account.provider.displayName)
                 Toggle("Include in “All”", isOn: $state.account.includeInAll)
                 Toggle("Pin in the menu bar", isOn: $state.account.pinnedInMenuBar)
             }
@@ -154,7 +156,10 @@ private struct AccountEditor: View {
                 if account.provider == .claudeCode { claudeLimitsSection }
             case .apiKey:
                 Section("Source") {
-                    LabeledContent("Key", value: Keychain.read(account.id) == nil ? "Missing" : "Saved in Keychain")
+                    LabeledContent(account.provider.keyName, value: Keychain.read(account.id) == nil ? "Missing" : "Saved in Keychain")
+                    if let extra = account.provider.extraFieldName {
+                        TextField(extra, text: Binding(get: { state.account.extraID ?? "" }, set: { state.account.extraID = $0.isEmpty ? nil : $0 }))
+                    }
                     HStack {
                         SecureField("Replace key", text: $state.newKey)
                         Button("Save") {
@@ -164,6 +169,7 @@ private struct AccountEditor: View {
                         .disabled(state.newKey.isEmpty)
                     }
                     LabeledContent("Connects to", value: account.provider.allowedHosts.sorted().joined(separator: ", ") + " only")
+                    if let docs = account.provider.docsURL { Link("Provider documentation", destination: docs) }
                     Picker("Refresh every", selection: $state.account.refreshMinutes) {
                         ForEach([5, 15, 30, 60], id: \.self) { Text("\($0) minutes").tag($0) }
                     }

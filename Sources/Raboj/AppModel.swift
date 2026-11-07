@@ -48,6 +48,8 @@ final class AppModel: ObservableObject {
 
     private var readers: [UUID: FolderReader] = [:]
     private var lastAPIFetch: [UUID: Date] = [:]
+    /// End of the last successful API fetch, so later fetches only ask for recent days.
+    private var apiFetchedThrough: [UUID: Date] = [:]
     private var apiTasks: [UUID: Task<Void, Never>] = [:]
     private var timer: Timer?
     private let transport = URLSessionTransport()
@@ -118,10 +120,11 @@ final class AppModel: ObservableObject {
         status.error = result.error
         if result.error == nil { status.lastUpdated = Date() }
         statuses[id] = status
-        guard !result.events.isEmpty || result.plan != nil || ledgers[id] == nil else { return }
+        guard !result.events.isEmpty || result.plan != nil || result.info != nil || ledgers[id] == nil else { return }
         var ledger = ledgers[id] ?? UsageLedger()
         ledger.merge(result.events)
         ledger.offer(plan: result.plan)
+        if let info = result.info { ledger.info = info }
         ledger.prune(before: Date().addingTimeInterval(-FolderReader.retention))
         ledgers[id] = ledger
     }
@@ -129,22 +132,22 @@ final class AppModel: ObservableObject {
     private func fetchAPI(_ account: Account) {
         guard let api = account.provider.api else { return }
         guard let key = Keychain.read(account.id) else {
-            statuses[account.id, default: AccountStatus()].error = "No API key saved. Add it again in Settings."
+            statuses[account.id, default: AccountStatus()].error = "No key saved. Add it again in Settings."
             return
         }
         statuses[account.id, default: AccountStatus()].loading = true
         let id = account.id
-        let label = account.label
-        let client = GuardedClient(provider: account.provider, transport: transport)
         let end = Date()
-        let start = Calendar.current.startOfDay(for: end.addingTimeInterval(-FolderReader.retention))
+        let retentionStart = Calendar.current.startOfDay(for: end.addingTimeInterval(-FolderReader.retention))
+        // After the first full fetch, re-read only the last few days: older days don't change.
+        let start = apiFetchedThrough[id].map { max(retentionStart, Calendar.current.startOfDay(for: $0.addingTimeInterval(-2 * 86_400))) } ?? retentionStart
+        let context = makeContext(key: key, provider: account.provider, label: account.label, extraID: account.extraID)
         apiTasks[id]?.cancel()
         apiTasks[id] = Task { [weak self] in
             do {
-                let events = try await api.fetch(key: key, from: start, to: end, client: client, accountLabel: label) { entry in
-                    Task { @MainActor in self?.appendLog(entry) }
-                }
-                self?.apply(ReadResult(events: events), to: id)
+                let fetched = try await api.fetch(context, from: start, to: end)
+                self?.apiFetchedThrough[id] = end
+                self?.apply(ReadResult(events: fetched.events, plan: fetched.plan, info: fetched.info), to: id)
             } catch is CancellationError {
             } catch {
                 self?.apply(ReadResult(error: error.localizedDescription), to: id)
@@ -152,15 +155,18 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func makeContext(key: String, provider: Provider, label: String, extraID: String?) -> APIContext {
+        APIContext(key: key, extraID: extraID, accountLabel: label, client: GuardedClient(provider: provider, transport: transport)) { [weak self] entry in
+            Task { @MainActor in self?.appendLog(entry) }
+        }
+    }
+
     /// Checks a key before the account is added. Returns nil when it works, or the error to show.
-    func test(key: String, provider: Provider, label: String) async -> String? {
+    func test(key: String, provider: Provider, label: String, extraID: String?) async -> String? {
         guard let api = provider.api else { return nil }
-        let client = GuardedClient(provider: provider, transport: transport)
         let end = Date()
         do {
-            _ = try await api.fetch(key: key, from: end.addingTimeInterval(-2 * 86_400), to: end, client: client, accountLabel: label) { entry in
-                Task { @MainActor in self.appendLog(entry) }
-            }
+            _ = try await api.fetch(makeContext(key: key, provider: provider, label: label, extraID: extraID), from: end.addingTimeInterval(-86_400), to: end)
             return nil
         } catch {
             return error.localizedDescription
@@ -183,23 +189,35 @@ final class AppModel: ObservableObject {
     var nextColor: AccountColor { AccountColor.next(after: accounts.map(\.color)) }
 
     func add(_ account: Account, apiKey: String?) {
-        if let apiKey { Keychain.save(apiKey, for: account.id) }
-        accounts.append(account)
+        add([account], apiKey: apiKey)
+    }
+
+    /// Adds several accounts at once (e.g. a work and a personal Claude Code folder).
+    func add(_ newAccounts: [Account], apiKey: String?) {
+        for account in newAccounts {
+            if let apiKey { Keychain.save(apiKey, for: account.id) }
+            accounts.append(account)
+            prepare(account)
+            refresh(account, force: true)
+        }
         save()
-        prepare(account)
-        refresh(account, force: true)
-        selection = .account(account.id)
+        if newAccounts.count == 1, let account = newAccounts.first { selection = .account(account.id) } else { selection = .all }
     }
 
     /// Saves edits to an account (label, color, toggles, refresh interval).
     func update(_ account: Account) {
         guard let index = accounts.firstIndex(where: { $0.id == account.id }) else { return }
         let folderChanged = accounts[index].folderBookmark != account.folderBookmark || accounts[index].folderPath != account.folderPath
+        let sourceChanged = accounts[index].extraID != account.extraID
         accounts[index] = account
         save()
         if folderChanged {
             ledgers[account.id] = nil
             prepare(account)
+            refresh(account, force: true)
+        } else if sourceChanged {
+            ledgers[account.id] = nil
+            apiFetchedThrough[account.id] = nil
             refresh(account, force: true)
         }
     }
@@ -213,6 +231,7 @@ final class AppModel: ObservableObject {
     func replaceKey(_ key: String, for account: Account) {
         Keychain.save(key, for: account.id)
         statuses[account.id]?.error = nil
+        apiFetchedThrough[account.id] = nil
         refresh(account, force: true)
     }
 
@@ -222,6 +241,8 @@ final class AppModel: ObservableObject {
         readers[id] = nil
         ledgers[id] = nil
         statuses[id] = nil
+        apiFetchedThrough[id] = nil
+        lastAPIFetch[id] = nil
         accounts.removeAll { $0.id == id }
         if selection == .account(id) { selection = .all }
         save()
@@ -255,6 +276,8 @@ final class AppModel: ObservableObject {
         switch account.provider.headline {
         case .cost: return Format.usd(today.cost ?? 0)
         case .tokens: return Format.tokens(today.tokens.total)
+        case .requests: return "\(today.requests) req"
+        case .balance: return ledger.info.first?.value ?? "—"
         }
     }
 

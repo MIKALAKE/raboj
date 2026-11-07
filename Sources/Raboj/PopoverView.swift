@@ -152,13 +152,18 @@ private struct AllAccountsView: View {
         let note: String = {
             if let error = model.status(account.id).error { return error }
             if let plan, let reset = plan.resetsAt { return "\(plan.title) · resets in \(Format.countdown(to: reset, now: model.now))" }
-            if let cost = ledger.summary(.month, now: model.now).cost, account.provider.headline == .cost { return "\(Format.usd(cost)) in the last 30 days" }
-            return "\(Format.tokens(today.tokens.total)) tokens today"
+            switch account.provider.headline {
+            case .cost: return "\(Format.usd(ledger.summary(.month, now: model.now).cost ?? 0)) in the last 30 days"
+            case .requests: return "\(ledger.summary(.month, now: model.now).requests) requests in the last 30 days"
+            case .balance: return ledger.info.first?.title ?? "Balance"
+            case .tokens: return "\(Format.tokens(today.tokens.total)) tokens today"
+            }
         }()
         let color = Color(nsColor: account.color.nsColor)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Circle().fill(color).frame(width: 9, height: 9)
+                ProviderLogoView(provider: account.provider, size: 14)
                 Text(account.label).fontWeight(.semibold)
                 Text(account.provider.displayName).font(.caption).foregroundStyle(.secondary)
                 Spacer()
@@ -186,10 +191,9 @@ struct AccountDetailView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
+                ProviderLogoView(provider: account.provider, size: 16)
                 Text(account.provider.displayName)
                     .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.08)))
                 Text(sourceText).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
 
@@ -206,11 +210,26 @@ struct AccountDetailView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(bigNumber(summary)).font(.system(size: 32, weight: .bold))
-                Text(account.provider.headline == .cost ? "billed" : "tokens").foregroundStyle(.secondary)
+                Text(bigNumber(summary, ledger: ledger)).font(.system(size: 32, weight: .bold))
+                Text(unitLabel).foregroundStyle(.secondary)
                 Spacer()
                 if let change = summary.change {
                     Text("\(Format.change(change)) vs \(summary.changeBaseline)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                }
+            }
+
+            if !ledger.info.isEmpty {
+                Card {
+                    ForEach(ledger.info) { item in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(item.title).font(.caption)
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(item.value).font(.caption.weight(.semibold))
+                                if let detail = item.detail, !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(.secondary) }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -248,11 +267,13 @@ struct AccountDetailView: View {
                     .buttonStyle(.link).font(.caption)
             }
 
-            if account.provider.headline == .tokens || summary.tokens.total > 0 {
+            if summary.tokens.total > 0 {
                 TokenSplit(tokens: summary.tokens, color: color)
             }
 
-            WeekChart(days: ledger.daily(days: 7, now: model.now), color: color, useCost: account.provider.headline == .cost)
+            if account.provider.headline != .balance {
+                WeekChart(days: ledger.daily(days: 7, now: model.now), color: color, metric: account.provider.headline)
+            }
 
             HStack(alignment: .top, spacing: 16) {
                 ShareList(title: "By model", items: summary.byModel)
@@ -271,11 +292,25 @@ struct AccountDetailView: View {
 
     private var sourceText: String {
         if let path = account.folderPath { return "Local logs · " + FolderAccess.displayPath(path) }
-        return "Official Admin API · key in Keychain"
+        return "Official API · key in Keychain"
     }
 
-    private func bigNumber(_ summary: UsageSummary) -> String {
-        account.provider.headline == .cost ? Format.usd(summary.cost ?? 0) : Format.tokens(summary.tokens.total)
+    private var unitLabel: String {
+        switch account.provider.headline {
+        case .tokens: "tokens"
+        case .cost: "billed"
+        case .requests: "requests"
+        case .balance: "balance"
+        }
+    }
+
+    private func bigNumber(_ summary: UsageSummary, ledger: UsageLedger) -> String {
+        switch account.provider.headline {
+        case .tokens: Format.tokens(summary.tokens.total)
+        case .cost: Format.usd(summary.cost ?? 0)
+        case .requests: "\(summary.requests)"
+        case .balance: ledger.info.first?.value ?? "—"
+        }
     }
 }
 
@@ -347,17 +382,33 @@ private struct TokenSplit: View {
 private struct WeekChart: View {
     let days: [DayTotal]
     let color: Color
-    let useCost: Bool
+    let metric: Headline
+
+    private func value(_ day: DayTotal) -> Double {
+        switch metric {
+        case .cost: day.cost
+        case .requests: Double(day.requests)
+        case .tokens, .balance: Double(day.tokens)
+        }
+    }
+
+    private func label(_ total: Double) -> String {
+        switch metric {
+        case .cost: Format.usd(total)
+        case .requests: "\(Int(total)) requests"
+        case .tokens, .balance: Format.tokens(Int(total)) + " tokens"
+        }
+    }
 
     var body: some View {
-        let values = days.map { useCost ? $0.cost : Double($0.tokens) }
+        let values = days.map(value)
         let maxValue = max(values.max() ?? 0, 0.000_1)
         let total = values.reduce(0, +)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Last 7 days").font(.caption.weight(.semibold))
                 Spacer()
-                Text(useCost ? Format.usd(total) : Format.tokens(Int(total)) + " tokens").font(.caption).foregroundStyle(.secondary)
+                Text(label(total)).font(.caption).foregroundStyle(.secondary)
             }
             HStack(alignment: .bottom, spacing: 6) {
                 ForEach(Array(days.enumerated()), id: \.offset) { index, day in

@@ -16,21 +16,33 @@ enum FolderAccess {
     /// Shows the standard macOS folder picker, starting at the provider's usual folder.
     @MainActor
     static func choose(for provider: Provider) -> (url: URL, bookmark: Data?)? {
+        chooseFolders(for: provider, multiple: false).first
+    }
+
+    /// Like `choose`, but lets the user ⌘-click several folders (one account per folder).
+    @MainActor
+    static func chooseMany(for provider: Provider) -> [(url: URL, bookmark: Data?)] {
+        chooseFolders(for: provider, multiple: true)
+    }
+
+    @MainActor
+    private static func chooseFolders(for provider: Provider, multiple: Bool) -> [(url: URL, bookmark: Data?)] {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = multiple
         panel.showsHiddenFiles = true
         panel.prompt = "Allow read access"
-        panel.message = "Choose the \(provider.displayName) data folder. Răboj will only read usage from it."
-        if let name = provider.defaultFolderName {
-            let suggested = realHome.appendingPathComponent(name, isDirectory: true)
-            panel.directoryURL = FileManager.default.fileExists(atPath: suggested.path) ? suggested : realHome
-        }
+        panel.message = multiple
+            ? "Choose the \(provider.displayName) data folders, one per account (⌘-click to pick several). Răboj only reads usage from them."
+            : "Choose the \(provider.displayName) data folder. Răboj only reads usage from it."
+        // Open the home folder so ~/.claude and ~/.claude-* sit side by side.
+        panel.directoryURL = realHome
         NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        let bookmark = try? url.bookmarkData(options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess], includingResourceValuesForKeys: nil, relativeTo: nil)
-        return (url, bookmark)
+        guard panel.runModal() == .OK else { return [] }
+        return panel.urls.map { url in
+            (url, try? url.bookmarkData(options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess], includingResourceValuesForKeys: nil, relativeTo: nil))
+        }
     }
 
     static func resolve(_ bookmark: Data) -> (url: URL, stale: Bool)? {

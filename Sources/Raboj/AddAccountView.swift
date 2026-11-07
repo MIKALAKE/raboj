@@ -1,39 +1,53 @@
+import AppKit
 import RabojCore
 import SwiftUI
+
+/// One folder chosen in the add-account form; becomes one account.
+struct PendingFolder: Identifiable {
+    let id = UUID()
+    var url: URL
+    var bookmark: Data?
+    var label: String
+    var color: AccountColor
+}
 
 /// Form state for AddAccountView. An ObservableObject instead of `@State`, because `@State`
 /// is a macro whose plugin ships only with full Xcode, and Răboj must build with the Command Line Tools.
 final class AddAccountForm: ObservableObject {
     @Published var provider: Provider?
+    @Published var folders: [PendingFolder] = []
     @Published var label = ""
     @Published var color: AccountColor = .blue
-    @Published var folderURL: URL?
-    @Published var folderBookmark: Data?
     @Published var apiKey = ""
+    @Published var extraID = ""
     @Published var testing = false
     @Published var testResult: String?
     @Published var testPassed = false
+    @Published var skipped: [String] = []
 }
 
-/// Pick a provider, then connect it: a folder for local tools, an admin key for APIs.
+/// Pick a provider, then connect it: one or more folders for local tools, a key for APIs.
 struct AddAccountView: View {
     @EnvironmentObject private var model: AppModel
     @StateObject private var form = AddAccountForm()
     let onDone: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let provider = form.provider {
-                connectForm(for: provider)
-            } else {
-                picker
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if let provider = form.provider {
+                    connectForm(for: provider)
+                } else {
+                    picker
+                }
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(20)
-        .frame(minWidth: 420, minHeight: 500, alignment: .topLeading)
+        .frame(minWidth: 460, minHeight: 560)
     }
 
-    // MARK: Step 1
+    // MARK: Step 1: provider
 
     private var picker: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -43,125 +57,213 @@ struct AddAccountView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(Provider.allCases, id: \.self) { provider in
-                Button {
-                    select(provider)
-                } label: {
-                    HStack(spacing: 12) {
-                        Text(provider.monogram)
-                            .font(.caption.weight(.bold))
-                            .frame(width: 32, height: 32)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.08)))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(provider.displayName).fontWeight(.semibold)
-                            Text(provider.sourceDescription).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.08)))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            Text("More providers are added only when they offer an official API or local logs to read usage from.")
+            group("On this Mac · no key, no network", providers: Provider.allCases.filter { $0.connection == .folder })
+            group("With a key · official usage APIs", providers: Provider.allCases.filter { $0.connection == .apiKey })
+            Text("Not available yet, because these services offer no official way to read usage: the ChatGPT, Claude and Gemini apps, the Gemini API (AI Studio), Mistral and Perplexity.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func group(_ title: String, providers: [Provider]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+            ForEach(providers, id: \.self) { provider in
+                Button { select(provider) } label: { providerRow(provider) }
+                    .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func providerRow(_ provider: Provider) -> some View {
+        let count = model.accounts.filter { $0.provider == provider }.count
+        return HStack(spacing: 12) {
+            ProviderLogoView(provider: provider, size: 22)
+                .frame(width: 34, height: 34)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(provider.displayName).fontWeight(.semibold)
+                Text(provider.sourceDescription).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if count > 0 {
+                Text("\(count) added").font(.caption).foregroundStyle(.secondary)
+            }
+            Image(systemName: "chevron.right").foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.08)))
+        .contentShape(Rectangle())
     }
 
     private func select(_ provider: Provider) {
         let sameProvider = model.accounts.filter { $0.provider == provider }.count
         form.provider = provider
+        form.folders = []
+        form.skipped = []
         form.label = sameProvider == 0 ? provider.displayName : "\(provider.displayName) \(sameProvider + 1)"
         form.color = model.nextColor
-        form.folderURL = nil
-        form.folderBookmark = nil
         form.apiKey = ""
+        form.extraID = ""
         form.testResult = nil
         form.testPassed = false
     }
 
-    // MARK: Step 2
+    // MARK: Step 2: connect
 
     @ViewBuilder
     private func connectForm(for provider: Provider) -> some View {
         Button { form.provider = nil } label: { Label("All providers", systemImage: "chevron.left") }
             .buttonStyle(.link)
-        Text(provider.connection == .folder ? "Connect \(provider.displayName)" : "Connect with an Admin API key")
-            .font(.title2.weight(.semibold))
-
-        Form {
-            TextField("Name", text: $form.label, prompt: Text("e.g. Work"))
-            Picker("Color", selection: $form.color) {
-                ForEach(AccountColor.allCases, id: \.self) { option in
-                    Label(option.title, systemImage: "circle.fill").foregroundStyle(Color(nsColor: option.nsColor)).tag(option)
-                }
-            }
+        HStack(spacing: 10) {
+            ProviderLogoView(provider: provider, size: 26)
+            Text("Connect \(provider.displayName)").font(.title2.weight(.semibold))
         }
-        .formStyle(.columns)
 
         switch provider.connection {
         case .folder: folderSection(provider)
         case .apiKey: keySection(provider)
         }
 
-        Spacer(minLength: 0)
         HStack {
+            if let docs = provider.docsURL {
+                Link("How Răboj reads \(provider.displayName)", destination: docs).font(.caption)
+            }
             Spacer()
             Button("Cancel", action: onDone).keyboardShortcut(.cancelAction)
-            Button("Add Account") { add(provider) }
+            Button(addTitle(provider)) { add(provider) }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canAdd(provider))
         }
     }
 
+    // MARK: Folders
+
     private func folderSection(_ provider: Provider) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(provider == .claudeCode
-                 ? "Choose the folder Claude Code keeps its data in: usually ~/.claude, or the folder in CLAUDE_CONFIG_DIR if you use several accounts."
-                 : "Choose the folder Codex keeps its data in: usually ~/.codex, or the folder in CODEX_HOME.")
+        VStack(alignment: .leading, spacing: 12) {
+            Text(folderHelp(provider))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Button(form.folderURL == nil ? "Choose Folder…" : "Choose Another…") {
-                    if let chosen = FolderAccess.choose(for: provider) {
-                        form.folderURL = chosen.url
-                        form.folderBookmark = chosen.bookmark
+
+            Button(form.folders.isEmpty ? "Choose Folders…" : "Add More Folders…") { chooseFolders(provider) }
+                .controlSize(.large)
+
+            ForEach($form.folders) { $folder in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "folder")
+                        Text(FolderAccess.displayPath(folder.url.path)).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button {
+                            form.folders.removeAll { $0.id == folder.id }
+                        } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Remove this folder")
+                    }
+                    HStack {
+                        TextField("Name", text: $folder.label, prompt: Text("e.g. Work"))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 180)
+                        ColorSwatchPicker(selection: $folder.color)
+                    }
+                    if !FolderReader.looksValid(folder.url, for: provider) {
+                        Label("No \(provider.logsSubfolder ?? "") folder inside. Usage may stay empty.", systemImage: "exclamationmark.triangle")
+                            .font(.caption).foregroundStyle(.orange)
                     }
                 }
-                if let url = form.folderURL {
-                    Text(FolderAccess.displayPath(url.path)).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
-                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.08)))
             }
-            if let url = form.folderURL, !FolderReader.looksValid(url, for: provider) {
-                Label("This folder has no \(provider == .codex ? "sessions" : "projects") folder inside. Usage may stay empty.", systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.orange)
+
+            ForEach(form.skipped, id: \.self) { path in
+                Label("\(path) is already added", systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
             }
+
             PrivacyNote(lines: [
-                "Read-only access to this folder only, granted by macOS",
+                "Read-only access to the folders you choose, granted by macOS",
                 "Reads token counts, model, time and project name; never your prompts",
-                "Nothing leaves your Mac for this account",
+                "Nothing leaves your Mac for these accounts",
             ])
         }
     }
 
+    private func folderHelp(_ provider: Provider) -> String {
+        switch provider {
+        case .claudeCode:
+            return "Each Claude Code account keeps its data in its own folder: ~/.claude for the default one, and the folder set in CLAUDE_CONFIG_DIR for the others (for example ~/.claude-personal). Select all of them at once with ⌘-click; Răboj adds one account per folder. Not sure which folder an account uses? Run echo $CLAUDE_CONFIG_DIR where you use it; empty means ~/.claude."
+        case .codex:
+            return "Codex keeps its data in ~/.codex, or in the folder set in CODEX_HOME. Using several Codex accounts? Select each folder with ⌘-click; Răboj adds one account per folder."
+        default:
+            return "Gemini CLI keeps its data in ~/.gemini. Choose that folder; Răboj reads the chat recordings in its tmp folder."
+        }
+    }
+
+    private func chooseFolders(_ provider: Provider) {
+        let chosen = FolderAccess.chooseMany(for: provider)
+        var used = model.accounts.map(\.color) + form.folders.map(\.color)
+        let existing = Set(model.accounts.compactMap(\.folderPath) + form.folders.map(\.url.path))
+        form.skipped = []
+        for item in chosen {
+            guard !existing.contains(item.url.path) else {
+                form.skipped.append(FolderAccess.displayPath(item.url.path))
+                continue
+            }
+            let color = AccountColor.next(after: used)
+            used.append(color)
+            form.folders.append(PendingFolder(url: item.url, bookmark: item.bookmark, label: Self.suggestedName(for: item.url, provider: provider), color: color))
+        }
+    }
+
+    /// ".claude" → "Claude Code", ".claude-personal" → "Personal", "work" → "Work".
+    static func suggestedName(for url: URL, provider: Provider) -> String {
+        var name = url.lastPathComponent
+        if let sub = provider.logsSubfolder, name == sub { name = url.deletingLastPathComponent().lastPathComponent }
+        if let base = provider.defaultFolderName {
+            if name == base { return provider.displayName }
+            for separator in ["-", "_", "."] where name.hasPrefix(base + separator) {
+                name = String(name.dropFirst(base.count + 1))
+            }
+        }
+        name = name.trimmingCharacters(in: CharacterSet(charactersIn: "._- "))
+        return name.isEmpty ? provider.displayName : name.replacingOccurrences(of: "-", with: " ").capitalized
+    }
+
+    // MARK: Key
+
     private func keySection(_ provider: Provider) -> some View {
         let host = provider.allowedHosts.sorted().joined(separator: ", ")
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(provider == .anthropicAPI
-                 ? "Organization admins can create an Admin API key (sk-ant-admin…) in the Claude Console. Răboj uses it only to read usage and cost reports."
-                 : "Organization owners can create an Admin key in the OpenAI platform settings. Răboj uses it only to read usage and costs.")
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(provider.keyHelp)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            SecureField("Admin API key", text: $form.apiKey)
-                .textFieldStyle(.roundedBorder)
-                .onChange(of: form.apiKey) {
-                    form.testResult = nil
-                    form.testPassed = false
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    Text("Name")
+                    TextField("Name", text: $form.label, prompt: Text("e.g. Team")).textFieldStyle(.roundedBorder)
                 }
+                GridRow {
+                    Text("Color")
+                    ColorSwatchPicker(selection: $form.color)
+                }
+                if let extra = provider.extraFieldName {
+                    GridRow {
+                        Text(extra)
+                        TextField(extra, text: $form.extraID).textFieldStyle(.roundedBorder)
+                    }
+                }
+                GridRow {
+                    Text("Key")
+                    SecureField(provider.keyName, text: $form.apiKey)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: form.apiKey) {
+                            form.testResult = nil
+                            form.testPassed = false
+                        }
+                }
+            }
             HStack {
                 Button(form.testing ? "Testing…" : "Test Connection") { test(provider) }
                     .disabled(form.apiKey.isEmpty || form.testing)
@@ -169,13 +271,13 @@ struct AddAccountView: View {
                     Label(result, systemImage: form.testPassed ? "checkmark.circle.fill" : "xmark.octagon.fill")
                         .font(.caption)
                         .foregroundStyle(form.testPassed ? Color.green : Color.red)
-                        .lineLimit(2)
+                        .lineLimit(3)
                 }
             }
             PrivacyNote(lines: [
                 "Saved in your macOS Keychain, not in a file",
                 "Sent only to \(host), over HTTPS",
-                "Used only for the usage and cost endpoints",
+                "Used only for the usage, cost or balance endpoints",
                 "Every request is listed in Settings › Access Log",
                 "Removing the account deletes the key",
             ])
@@ -185,36 +287,48 @@ struct AddAccountView: View {
     private func test(_ provider: Provider) {
         form.testing = true
         let key = form.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let accountLabel = form.label
+        let label = form.label
+        let extra = form.extraID.trimmingCharacters(in: .whitespaces)
         Task {
-            let error = await model.test(key: key, provider: provider, label: accountLabel)
+            let error = await model.test(key: key, provider: provider, label: label, extraID: extra.isEmpty ? nil : extra)
             form.testing = false
             form.testPassed = error == nil
             form.testResult = error ?? "Connection works"
         }
     }
 
+    // MARK: Add
+
+    private func addTitle(_ provider: Provider) -> String {
+        provider.connection == .folder && form.folders.count > 1 ? "Add \(form.folders.count) Accounts" : "Add Account"
+    }
+
     private func canAdd(_ provider: Provider) -> Bool {
-        guard !form.label.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
         switch provider.connection {
-        case .folder: return form.folderURL != nil
-        case .apiKey: return !form.apiKey.isEmpty
+        case .folder:
+            return !form.folders.isEmpty && form.folders.allSatisfy { !$0.label.trimmingCharacters(in: .whitespaces).isEmpty }
+        case .apiKey:
+            guard !form.label.trimmingCharacters(in: .whitespaces).isEmpty, !form.apiKey.isEmpty else { return false }
+            return provider.extraFieldName == nil || !form.extraID.trimmingCharacters(in: .whitespaces).isEmpty
         }
     }
 
     private func add(_ provider: Provider) {
-        let account = Account(
-            provider: provider,
-            label: form.label.trimmingCharacters(in: .whitespaces),
-            color: form.color,
-            folderPath: form.folderURL?.path,
-            folderBookmark: form.folderBookmark
-        )
-        let key = provider.connection == .apiKey ? form.apiKey.trimmingCharacters(in: .whitespacesAndNewlines) : nil
-        model.add(account, apiKey: key)
-        onDone()
-        if provider == .claudeCode {
-            WindowCoordinator.shared.openSettings(tab: .accounts, account: account.id)
+        switch provider.connection {
+        case .folder:
+            let accounts = form.folders.map { folder in
+                Account(provider: provider, label: folder.label.trimmingCharacters(in: .whitespaces), color: folder.color, folderPath: folder.url.path, folderBookmark: folder.bookmark)
+            }
+            model.add(accounts, apiKey: nil)
+            onDone()
+            if provider == .claudeCode, let first = accounts.first {
+                WindowCoordinator.shared.openSettings(tab: .accounts, account: first.id)
+            }
+        case .apiKey:
+            let extra = form.extraID.trimmingCharacters(in: .whitespaces)
+            let account = Account(provider: provider, label: form.label.trimmingCharacters(in: .whitespaces), color: form.color, extraID: extra.isEmpty ? nil : extra)
+            model.add(account, apiKey: form.apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
+            onDone()
         }
     }
 }

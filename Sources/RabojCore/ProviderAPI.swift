@@ -63,7 +63,7 @@ public struct GuardedClient: Sendable {
 
     public func get(_ request: URLRequest, log: (AccessLogEntry) -> Void, accountLabel: String) async throws -> Data {
         let host = request.url?.host ?? "?"
-        let path = request.url?.path ?? "?"
+        let path = (request.httpMethod == "POST" ? "POST " : "") + (request.url?.path ?? "?")
         guard provider.allowedHosts.contains(host), request.url?.scheme == "https" else {
             log(AccessLogEntry(date: Date(), accountLabel: accountLabel, host: host, path: path, outcome: "blocked"))
             throw APIError.hostNotAllowed(host)
@@ -87,9 +87,44 @@ public struct GuardedClient: Sendable {
     }
 }
 
-/// A source that returns daily usage and cost buckets from a provider's official admin API.
+/// Everything an API source needs for one fetch.
+public struct APIContext: Sendable {
+    public var key: String
+    /// Extra identifier some providers need (xAI team ID).
+    public var extraID: String?
+    public var accountLabel: String
+    public var client: GuardedClient
+    public var log: @Sendable (AccessLogEntry) -> Void
+
+    public init(key: String, extraID: String? = nil, accountLabel: String, client: GuardedClient, log: @escaping @Sendable (AccessLogEntry) -> Void) {
+        self.key = key
+        self.extraID = extraID
+        self.accountLabel = accountLabel
+        self.client = client
+        self.log = log
+    }
+
+    func send(_ request: URLRequest) async throws -> Data {
+        try await client.get(request, log: log, accountLabel: accountLabel)
+    }
+}
+
+/// What one fetch from a provider API returned.
+public struct APIFetch: Sendable {
+    public var events: [UsageEvent] = []
+    public var plan: PlanSnapshot?
+    public var info: [InfoItem] = []
+    public init(events: [UsageEvent] = [], plan: PlanSnapshot? = nil, info: [InfoItem] = []) {
+        self.events = events
+        self.plan = plan
+        self.info = info
+    }
+}
+
+/// A provider's official usage API.
 public protocol UsageAPI: Sendable {
-    func fetch(key: String, from start: Date, to end: Date, client: GuardedClient, accountLabel: String, log: @escaping @Sendable (AccessLogEntry) -> Void) async throws -> [UsageEvent]
+    /// Fetches usage between `start` and `end`. Sources that only report current values ignore the range.
+    func fetch(_ context: APIContext, from start: Date, to end: Date) async throws -> APIFetch
 }
 
 public extension Provider {
@@ -97,13 +132,18 @@ public extension Provider {
         switch self {
         case .anthropicAPI: AnthropicAdminAPI()
         case .openAIAPI: OpenAIAdminAPI()
-        case .claudeCode, .codex: nil
+        case .xAI: XAIManagementAPI()
+        case .githubCopilot: CopilotBillingAPI()
+        case .cursorTeam: CursorAdminAPI()
+        case .openRouter: OpenRouterKeyAPI()
+        case .deepSeek: DeepSeekBalanceAPI()
+        case .claudeCode, .codex, .geminiCLI: nil
         }
     }
 }
 
-let userAgent = "Raboj/0.1 (+https://github.com/MIKALAKE/raboj)"
-private let maxPages = 10
+public let userAgent = "Raboj/0.1 (+https://github.com/MIKALAKE/raboj)"
+let maxPages = 10
 
 // MARK: - Anthropic
 
@@ -126,7 +166,8 @@ public struct AnthropicAdminAPI: UsageAPI {
 
     static func rfc3339(_ date: Date) -> String { date.formatted(.iso8601) }
 
-    public func fetch(key: String, from start: Date, to end: Date, client: GuardedClient, accountLabel: String, log: @escaping @Sendable (AccessLogEntry) -> Void) async throws -> [UsageEvent] {
+    public func fetch(_ context: APIContext, from start: Date, to end: Date) async throws -> APIFetch {
+        let key = context.key
         var events: [UsageEvent] = []
         var page: String?
         for _ in 0..<maxPages {
@@ -138,7 +179,7 @@ public struct AnthropicAdminAPI: UsageAPI {
                 URLQueryItem(name: "limit", value: "31"),
             ]
             if let page { query.append(URLQueryItem(name: "page", value: page)) }
-            let data = try await client.get(request(path: "usage_report/messages", key: key, query: query), log: log, accountLabel: accountLabel)
+            let data = try await context.send(request(path: "usage_report/messages", key: key, query: query))
             let decoded = try Self.decodeUsage(data)
             events += decoded.events
             guard let next = decoded.nextPage else { break }
@@ -152,13 +193,13 @@ public struct AnthropicAdminAPI: UsageAPI {
                 URLQueryItem(name: "limit", value: "31"),
             ]
             if let page { query.append(URLQueryItem(name: "page", value: page)) }
-            let data = try await client.get(request(path: "cost_report", key: key, query: query), log: log, accountLabel: accountLabel)
+            let data = try await context.send(request(path: "cost_report", key: key, query: query))
             let decoded = try Self.decodeCost(data)
             events += decoded.events
             guard let next = decoded.nextPage else { break }
             page = next
         }
-        return events
+        return APIFetch(events: events)
     }
 
     private struct Page<Result: Decodable>: Decodable {
@@ -241,7 +282,8 @@ public struct OpenAIAdminAPI: UsageAPI {
         return request
     }
 
-    public func fetch(key: String, from start: Date, to end: Date, client: GuardedClient, accountLabel: String, log: @escaping @Sendable (AccessLogEntry) -> Void) async throws -> [UsageEvent] {
+    public func fetch(_ context: APIContext, from start: Date, to end: Date) async throws -> APIFetch {
+        let key = context.key
         let startTime = String(Int(start.timeIntervalSince1970))
         let endTime = String(Int(end.timeIntervalSince1970))
         var events: [UsageEvent] = []
@@ -255,7 +297,7 @@ public struct OpenAIAdminAPI: UsageAPI {
                 URLQueryItem(name: "limit", value: "31"),
             ]
             if let page { query.append(URLQueryItem(name: "page", value: page)) }
-            let data = try await client.get(request(path: "usage/completions", key: key, query: query), log: log, accountLabel: accountLabel)
+            let data = try await context.send(request(path: "usage/completions", key: key, query: query))
             let decoded = try Self.decodeUsage(data)
             events += decoded.events
             guard let next = decoded.nextPage else { break }
@@ -270,13 +312,13 @@ public struct OpenAIAdminAPI: UsageAPI {
                 URLQueryItem(name: "limit", value: "90"),
             ]
             if let page { query.append(URLQueryItem(name: "page", value: page)) }
-            let data = try await client.get(request(path: "costs", key: key, query: query), log: log, accountLabel: accountLabel)
+            let data = try await context.send(request(path: "costs", key: key, query: query))
             let decoded = try Self.decodeCost(data)
             events += decoded.events
             guard let next = decoded.nextPage else { break }
             page = next
         }
-        return events
+        return APIFetch(events: events)
     }
 
     private struct Page<Result: Decodable>: Decodable {

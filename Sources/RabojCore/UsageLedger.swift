@@ -29,6 +29,7 @@ public struct NamedShare: Hashable, Sendable, Identifiable {
 
 public struct UsageSummary: Sendable {
     public var tokens: TokenCounts
+    public var requests: Int
     /// Billed cost, if any event in the period carried one.
     public var cost: Double?
     /// Relative change versus the comparison baseline (e.g. +0.34 = +34%), nil when there is no baseline.
@@ -44,6 +45,7 @@ public struct DayTotal: Hashable, Sendable, Identifiable {
     public var day: Date
     public var tokens: Int
     public var cost: Double
+    public var requests: Int
 }
 
 /// Claude's usage window: starts at the first message (rounded down to the hour) and lasts five hours.
@@ -61,6 +63,8 @@ public struct WindowEstimate: Hashable, Sendable {
 public struct UsageLedger: Sendable {
     public private(set) var events: [String: UsageEvent] = [:]
     public var plan: PlanSnapshot?
+    /// Latest non-time-series values (balances, limits), replaced on every successful fetch.
+    public var info: [InfoItem] = []
 
     public init() {}
 
@@ -68,7 +72,7 @@ public struct UsageLedger: Sendable {
         for event in newEvents { events[event.key] = event }
     }
 
-    public mutating func removeAll() { events.removeAll(); plan = nil }
+    public mutating func removeAll() { events.removeAll(); plan = nil; info = [] }
 
     public mutating func prune(before date: Date) {
         events = events.filter { $0.value.timestamp >= date }
@@ -94,20 +98,31 @@ public struct UsageLedger: Sendable {
         let current = events(from: start, to: end)
 
         var tokens = TokenCounts.zero
+        var requests = 0
         var cost = 0.0
         var hasCost = false
         var models: [String: Double] = [:]
         var projects: [String: Double] = [:]
         for event in current {
             tokens += event.tokens
+            requests += event.requests
             if let c = event.costUSD { cost += c; hasCost = true }
-            if event.tokens.total > 0 { models[Self.prettyModel(event.model), default: 0] += Double(event.tokens.total) }
-            if let project = event.project, event.tokens.total > 0 { projects[project, default: 0] += Double(event.tokens.total) }
+            // Shares use tokens when there are any, else requests, else cost.
+            let weight = event.tokens.total > 0 ? Double(event.tokens.total) : (event.requests > 0 ? Double(event.requests) : (event.costUSD ?? 0))
+            if weight > 0, event.model != "cost" { models[Self.prettyModel(event.model), default: 0] += weight }
+            if let project = event.project, weight > 0 { projects[project, default: 0] += weight }
         }
 
         // Baseline: today vs average of the previous 7 full days; 7 and 30 days vs the same length before.
-        let metric: (UsageEvent) -> Double = hasCost ? { $0.costUSD ?? 0 } : { Double($0.tokens.total) }
-        let currentValue = hasCost ? cost : Double(tokens.total)
+        let metric: (UsageEvent) -> Double
+        let currentValue: Double
+        if hasCost {
+            metric = { $0.costUSD ?? 0 }; currentValue = cost
+        } else if tokens.total == 0, requests > 0 {
+            metric = { Double($0.requests) }; currentValue = Double(requests)
+        } else {
+            metric = { Double($0.tokens.total) }; currentValue = Double(tokens.total)
+        }
         let baselineDays = period == .today ? 7 : period.days
         let baselineStart = calendar.date(byAdding: .day, value: -baselineDays, to: start)!
         let baselineEvents = events(from: baselineStart, to: start)
@@ -122,6 +137,7 @@ public struct UsageLedger: Sendable {
 
         return UsageSummary(
             tokens: tokens,
+            requests: requests,
             cost: hasCost ? cost : nil,
             change: change,
             changeBaseline: baselineLabel,
@@ -136,7 +152,12 @@ public struct UsageLedger: Sendable {
             let day = calendar.date(byAdding: .day, value: -offset, to: today)!
             let next = calendar.date(byAdding: .day, value: 1, to: day)!
             let slice = events(from: day, to: next)
-            return DayTotal(day: day, tokens: slice.reduce(0) { $0 + $1.tokens.total }, cost: slice.reduce(0) { $0 + ($1.costUSD ?? 0) })
+            return DayTotal(
+                day: day,
+                tokens: slice.reduce(0) { $0 + $1.tokens.total },
+                cost: slice.reduce(0) { $0 + ($1.costUSD ?? 0) },
+                requests: slice.reduce(0) { $0 + $1.requests }
+            )
         }
     }
 

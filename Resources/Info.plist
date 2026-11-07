@@ -8,6 +8,8 @@
 	<string>Răboj</string>
 	<key>CFBundleExecutable</key>
 	<string>Raboj</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.mikalake.raboj</string>
 	<key>CFBundleInfoDictionaryVersion</key>

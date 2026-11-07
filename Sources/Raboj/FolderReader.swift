@@ -5,6 +5,8 @@ import RabojCore
 struct ReadResult {
     var events: [UsageEvent] = []
     var plan: PlanSnapshot?
+    /// Non-time-series values from an API (balances, limits); nil means "unchanged".
+    var info: [InfoItem]?
     var error: String?
 }
 
@@ -32,9 +34,10 @@ final class FolderReader {
         if accessing { root.stopAccessingSecurityScopedResource() }
     }
 
-    /// Claude Code keeps logs in `projects/`, Codex in `sessions/`; accept the parent or the folder itself.
+    /// Claude Code keeps logs in `projects/`, Codex in `sessions/`, Gemini CLI in `tmp/`;
+    /// accept the tool's data folder or that subfolder itself.
     static func logsFolder(for provider: Provider, root: URL) -> URL {
-        let name = provider == .codex ? "sessions" : "projects"
+        guard let name = provider.logsSubfolder else { return root }
         let sub = root.appendingPathComponent(name)
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: sub.path, isDirectory: &isDirectory), isDirectory.boolValue { return sub }
@@ -43,7 +46,7 @@ final class FolderReader {
 
     /// True when the folder looks like the provider's data folder.
     static func looksValid(_ url: URL, for provider: Provider) -> Bool {
-        let name = provider == .codex ? "sessions" : "projects"
+        guard let name = provider.logsSubfolder else { return true }
         return FileManager.default.fileExists(atPath: url.appendingPathComponent(name).path) || url.lastPathComponent == name
     }
 
@@ -79,7 +82,12 @@ final class FolderReader {
                     result.events += output.events
                     if let plan = output.plan, plan.capturedAt > (result.plan?.capturedAt ?? .distantPast) { result.plan = plan }
                 }
-            case .anthropicAPI, .openAIAPI:
+            case .geminiCLI:
+                let project = GeminiLogParser.project(for: url)
+                chunk.forEachCompleteLine { line in
+                    if let event = GeminiLogParser.parse(line: line, project: project) { result.events.append(event) }
+                }
+            default:
                 break
             }
         }

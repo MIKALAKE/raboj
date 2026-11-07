@@ -107,7 +107,7 @@ private func event(_ key: String, _ time: String, tokens: Int, model: String = "
     }
 }
 
-private struct StubTransport: HTTPTransport {
+struct StubTransport: HTTPTransport {
     let responses: [String: String]
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let path = request.url!.path
@@ -116,7 +116,7 @@ private struct StubTransport: HTTPTransport {
     }
 }
 
-private final class LogBox: @unchecked Sendable {
+final class LogBox: @unchecked Sendable {
     var entries: [AccessLogEntry] = []
 }
 
@@ -126,7 +126,8 @@ private final class LogBox: @unchecked Sendable {
         let cost = #"{"data":[{"starting_at":"2026-11-06T00:00:00Z","ending_at":"2026-11-07T00:00:00Z","results":[{"amount":"123.45","currency":"USD"},{"amount":"76.55","currency":"USD"}]}],"has_more":false,"next_page":null}"#
         let client = GuardedClient(provider: .anthropicAPI, transport: StubTransport(responses: ["usage_report/messages": usage, "cost_report": cost]))
         let log = LogBox()
-        let events = try await AnthropicAdminAPI().fetch(key: "sk-ant-admin01-test", from: date("2026-11-01T00:00:00Z"), to: date("2026-11-07T00:00:00Z"), client: client, accountLabel: "Team", log: { log.entries.append($0) })
+        let context = APIContext(key: "sk-ant-admin01-test", accountLabel: "Team", client: client, log: { log.entries.append($0) })
+        let events = try await AnthropicAdminAPI().fetch(context, from: date("2026-11-01T00:00:00Z"), to: date("2026-11-07T00:00:00Z")).events
         let tokens = try #require(events.first { $0.model == "claude-opus-5-5" })
         #expect(tokens.tokens == TokenCounts(input: 1500, output: 500, cacheWrite: 15, cacheRead: 200))
         let money = try #require(events.first { $0.costUSD != nil })
@@ -145,7 +146,8 @@ private final class LogBox: @unchecked Sendable {
         let usage = #"{"object":"page","data":[{"object":"bucket","start_time":1762387200,"end_time":1762473600,"results":[{"object":"organization.usage.completions.result","input_tokens":1000,"input_cached_tokens":400,"output_tokens":50,"model":"gpt-x"}]}],"has_more":false,"next_page":null}"#
         let cost = #"{"object":"page","data":[{"object":"bucket","start_time":1762387200,"end_time":1762473600,"results":[{"object":"organization.costs.result","amount":{"value":1.25,"currency":"usd"}}]}],"has_more":false,"next_page":null}"#
         let client = GuardedClient(provider: .openAIAPI, transport: StubTransport(responses: ["usage/completions": usage, "costs": cost]))
-        let events = try await OpenAIAdminAPI().fetch(key: "k", from: Date(timeIntervalSince1970: 1_762_000_000), to: Date(timeIntervalSince1970: 1_762_500_000), client: client, accountLabel: "Org", log: { _ in })
+        let context = APIContext(key: "k", accountLabel: "Org", client: client, log: { _ in })
+        let events = try await OpenAIAdminAPI().fetch(context, from: Date(timeIntervalSince1970: 1_762_000_000), to: Date(timeIntervalSince1970: 1_762_500_000)).events
         #expect(events.first { $0.model == "gpt-x" }?.tokens == TokenCounts(input: 600, output: 50, cacheRead: 400))
         #expect(events.first { $0.costUSD != nil }?.costUSD == 1.25)
     }

@@ -42,14 +42,31 @@ public struct UsageEvent: Hashable, Sendable {
     public var costUSD: Double?
     /// Project or folder name, when the source reports it.
     public var project: String?
+    /// Requests counted by the provider (e.g. Copilot premium requests), when it counts requests instead of tokens.
+    public var requests: Int
 
-    public init(key: String, timestamp: Date, model: String, tokens: TokenCounts, costUSD: Double? = nil, project: String? = nil) {
+    public init(key: String, timestamp: Date, model: String, tokens: TokenCounts, costUSD: Double? = nil, project: String? = nil, requests: Int = 0) {
         self.key = key
         self.timestamp = timestamp
         self.model = model
         self.tokens = tokens
         self.costUSD = costUSD
         self.project = project
+        self.requests = requests
+    }
+}
+
+/// A labeled value a provider reports that is not a time series, e.g. an account balance or a key limit.
+public struct InfoItem: Hashable, Sendable, Identifiable {
+    public var id: String { title }
+    public var title: String
+    public var value: String
+    public var detail: String?
+
+    public init(title: String, value: String, detail: String? = nil) {
+        self.title = title
+        self.value = value
+        self.detail = detail
     }
 }
 
