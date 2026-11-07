@@ -1,0 +1,49 @@
+name: Release
+
+# Tag `vX.Y.Z` → build a universal, ad hoc signed Raboj.app, package it as a DMG with a SHA-256 file,
+# and attach both to a GitHub Release. Run it by hand (workflow_dispatch) to get the DMG as a build artifact only.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Resources/Info.plist
+
+      - name: Test
+        run: make test
+
+      - name: Build universal DMG
+        run: make dmg ARCHS="arm64 x86_64"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: raboj-dmg
+          path: |
+            build/*.dmg
+            build/*.dmg.sha256
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/*.dmg build/*.dmg.sha256 \
+            --title "Răboj ${GITHUB_REF_NAME#v}" \
+            --notes "Install with Homebrew (builds from source, no warnings) or download the DMG. The DMG is not notarized: after the first launch attempt, open System Settings › Privacy & Security and click Open Anyway. SHA-256 is in the .sha256 file." \
+            --verify-tag

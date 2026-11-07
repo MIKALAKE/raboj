@@ -8,13 +8,18 @@ CONFIG      ?= release
 APPDIR      ?= $(HOME)/Applications
 VERSION     := $(shell /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)
 DMG         := $(BUILD_DIR)/$(APP_NAME)-$(VERSION).dmg
+# Optional, e.g. ARCHS="arm64 x86_64" for a universal binary (multi-arch builds need full Xcode, as on CI).
+ARCHS       ?=
+# Extra flags, e.g. --disable-sandbox when building inside Homebrew's own sandbox.
+EXTRA_SWIFT_FLAGS ?=
+SWIFT_FLAGS := -c $(CONFIG) $(foreach arch,$(ARCHS),--arch $(arch)) $(EXTRA_SWIFT_FLAGS)
 
 .PHONY: all build test lint app verify run install uninstall dmg clean
 
 all: app
 
 build: lint
-	swift build -c $(CONFIG)
+	swift build $(SWIFT_FLAGS)
 
 test:
 	swift test
@@ -28,7 +33,7 @@ lint:
 app: build
 	rm -rf "$(APP)"
 	mkdir -p "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
-	cp "$$(swift build -c $(CONFIG) --show-bin-path)/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
+	cp "$$(swift build $(SWIFT_FLAGS) --show-bin-path)/$(APP_NAME)" "$(APP)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
 	codesign --force --sign - --options runtime \
 		--entitlements Resources/Raboj.entitlements "$(APP)"
