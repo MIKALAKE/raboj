@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Răboj's whole permission set. Kept deliberately small:
+  - App Sandbox on.
+  - Outgoing connections only (network.client), used to call the official usage endpoints of the
+    providers the user connects. No incoming connections (no network.server).
+  - Read-only access to folders the user picks in the standard macOS dialog, remembered across launches.
+  Run `make verify` to print what the built app actually carries.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+</dict>
+</plist>
