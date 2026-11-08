@@ -244,7 +244,7 @@ Quit Răboj, delete the app, and optionally remove `~/Library/Containers/io.gith
 
 Răboj is free and open source, and it stays that way. If it saves you a surprise at the end of the month, you can buy me a coffee. ☕
 
-<a href="https://buymeacoffee.com/iampaulpop"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee" height="36"></a>
+<a href="https://buymeacoffee.com/iampaulpop"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="50"></a>
 
 Bug reports, ideas and pull requests are just as welcome.
 
