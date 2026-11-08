@@ -93,16 +93,16 @@ No backend, no telemetry, no account. Sandboxed, read-only, and every network re
 |:-:|---|---|---|
 | 💻 | **Claude Code** | Its data folder (`~/.claude`, or any `CLAUDE_CONFIG_DIR`) | Tokens by type, model and project · session and weekly plan limits ([setup](#claude-plan-limits)) |
 | 💻 | **Codex** | Its data folder (`~/.codex`, or `CODEX_HOME`) | Tokens by model and project · plan limits |
-| 💻 | **Gemini CLI** | Its data folder (`~/.gemini`) | Tokens by model and project |
+| 💻 | **Gemini CLI** <sup>beta</sup> | Its data folder (`~/.gemini`) | Tokens by model and project |
 | 🔑 | **Anthropic API** | Admin API key ([docs](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)) | Billed cost, tokens by model |
 | 🔑 | **OpenAI API** | Admin API key ([docs](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage)) | Billed cost, tokens by model |
-| 🔑 | **xAI** | Management key + team ID ([docs](https://docs.x.ai/developers/rest-api-reference/management/billing)) | Billed cost per model |
-| 🔑 | **GitHub Copilot** | Fine-grained token ([docs](https://docs.github.com/en/rest/billing/usage)) | Premium requests and cost per model |
-| 🔑 | **Cursor** (Teams) | Team admin key ([docs](https://cursor.com/docs/account/teams/admin-api)) | Requests per day, on-demand spend |
-| 🔑 | **OpenRouter** | API key ([docs](https://openrouter.ai/docs/api_reference/limits)) | Spend per day, key limit |
-| 🔑 | **DeepSeek** | API key ([docs](https://api-docs.deepseek.com/api/get-user-balance/)) | Account balance |
+| 🔑 | **xAI** <sup>beta</sup> | Management key + team ID ([docs](https://docs.x.ai/developers/rest-api-reference/management/billing)) | Billed cost per model |
+| 🔑 | **GitHub Copilot** <sup>beta</sup> | Fine-grained token ([docs](https://docs.github.com/en/rest/billing/usage)) | Premium requests and cost per model |
+| 🔑 | **Cursor** (Teams) <sup>beta</sup> | Team admin key ([docs](https://cursor.com/docs/account/teams/admin-api)) | Requests per day, on-demand spend |
+| 🔑 | **OpenRouter** <sup>beta</sup> | API key ([docs](https://openrouter.ai/docs/api_reference/limits)) | Spend per day, key limit |
+| 🔑 | **DeepSeek** <sup>beta</sup> | API key ([docs](https://api-docs.deepseek.com/api/get-user-balance/)) | Account balance |
 
-💻 reads local files, no network · 🔑 calls the provider's official API
+💻 reads local files, no network · 🔑 calls the provider's official API · <sup>beta</sup> built from the official docs, not yet confirmed with a real account: [tell us](https://github.com/MIKALAKE/raboj/issues/new?template=provider.yml) if it works for you
 
 Missing one? Providers need an official usage API or local logs. [Open an issue](https://github.com/MIKALAKE/raboj/issues) with a link to the docs.
 

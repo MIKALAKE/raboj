@@ -1,0 +1,22 @@
+name: Provider request or feedback
+description: Ask for a new provider, or tell us whether a beta provider works for you.
+labels: [provider]
+body:
+  - type: input
+    id: provider
+    attributes:
+      label: Provider
+      placeholder: "e.g. Mistral, Windsurf, or 'Cursor works for me'"
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Where can Răboj read usage?
+      description: >
+        Răboj only uses official, documented usage APIs or logs the tool writes on your Mac.
+        Link the API docs or describe the log files (folder and format, without real content).
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else

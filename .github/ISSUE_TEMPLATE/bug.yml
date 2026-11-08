@@ -1,0 +1,44 @@
+name: Bug report
+description: Something doesn't work or shows the wrong numbers.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please don't paste API keys, log contents or anything private.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what you saw. Screenshots help.
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options: [Claude Code, Codex, Gemini CLI, Anthropic API, OpenAI API, xAI, GitHub Copilot, Cursor, OpenRouter, DeepSeek, Not provider-specific]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Răboj version
+      description: Settings › About
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac
+      placeholder: "macOS 26.1, MacBook Air M3"
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed with
+      options: [Homebrew, DMG, From source]
+  - type: textarea
+    id: log
+    attributes:
+      label: Access Log entries (API accounts only)
+      description: Settings › Access Log shows each request and its status. Copy the failing lines, without keys.
