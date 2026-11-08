@@ -288,7 +288,10 @@ private struct AboutTab: View {
                 .frame(maxWidth: 380)
             Text("Free and open source. No backend, no tracking, no paywall.")
                 .foregroundStyle(.secondary)
-            Link("Source on GitHub", destination: URL(string: "https://github.com/MIKALAKE/raboj")!)
+            HStack(spacing: 16) {
+                Link("Source on GitHub", destination: URL(string: "https://github.com/MIKALAKE/raboj")!)
+                Link("☕ Buy me a coffee", destination: URL(string: "https://buymeacoffee.com/iampaulpop")!)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

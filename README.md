@@ -13,6 +13,7 @@ Claude Code · Codex · Gemini CLI · Anthropic · OpenAI · xAI · GitHub Copil
 [![License: MIT](https://img.shields.io/badge/license-MIT-2563EB)](LICENSE)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-15803D)](#privacy)
 [![Free](https://img.shields.io/badge/price-free-D97706)](#support)
+[![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-☕-FFDD00)](https://buymeacoffee.com/iampaulpop)
 
 [Install](#install) · [Features](#features) · [Providers](#supported-providers) · [Privacy](#privacy) · [Setup](#setting-up-accounts) · [FAQ](#faq)
 
@@ -241,7 +242,9 @@ Quit Răboj, delete the app, and optionally remove `~/Library/Containers/io.gith
 
 ## Support
 
-Răboj is free and open source, and it stays that way. If it saves you a surprise at the end of the month, a Buy Me a Coffee link will be here soon. ☕
+Răboj is free and open source, and it stays that way. If it saves you a surprise at the end of the month, you can buy me a coffee. ☕
+
+<a href="https://buymeacoffee.com/iampaulpop"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee" height="36"></a>
 
 Bug reports, ideas and pull requests are just as welcome.
 
