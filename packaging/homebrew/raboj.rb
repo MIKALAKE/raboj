@@ -10,7 +10,7 @@ class Raboj < Formula
   url "https://github.com/MIKALAKE/raboj/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "REPLACE_WITH_TARBALL_SHA256"
   license "MIT"
-  head "https://github.com/MIKALAKE/raboj.git", branch: "staging"
+  head "https://github.com/MIKALAKE/raboj.git", branch: "main"
 
   depends_on macos: :sonoma
 

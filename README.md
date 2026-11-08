@@ -247,7 +247,7 @@ Bug reports, ideas and pull requests are just as welcome.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). In short: SwiftPM with only the Command Line Tools, `make test`, PRs to `staging`.
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: SwiftPM with only the Command Line Tools, `make test`, PRs to `main`.
 
 ## License
 

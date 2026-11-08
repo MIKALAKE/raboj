@@ -24,7 +24,7 @@ make run      # open the built app
 
 ## Pull requests
 
-Branch from `staging`, open a PR to `staging`, keep CI green. Code, comments and PR text in English.
+Branch from `main`, open a PR to `main`, keep CI green. Code, comments and PR text in English.
 
 ## Checking numbers against real logs
 
