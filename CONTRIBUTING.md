@@ -32,3 +32,11 @@ Branch from `staging`, open a PR to `staging`, keep CI green. Code, comments and
 swift run Raboj --report claude ~/.claude
 swift run Raboj --report codex ~/.codex
 ```
+
+## README screenshots
+
+The images in `docs/images` are rendered from made-up demo data, never from real usage:
+
+```sh
+swift run Raboj --screenshots docs/images
+```

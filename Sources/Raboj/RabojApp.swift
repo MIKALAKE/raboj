@@ -11,6 +11,11 @@ enum RabojMain {
             Report.run(Array(arguments.dropFirst(index + 1)))
             return
         }
+        if let index = arguments.firstIndex(of: "--screenshots") {
+            let folder = arguments.dropFirst(index + 1).first ?? "docs/images"
+            MainActor.assumeIsolated { Screenshots.render(to: URL(fileURLWithPath: folder)) }
+            return
+        }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         Self.delegate = delegate

@@ -81,6 +81,14 @@ final class AppModel: ObservableObject {
 
     init() { load() }
 
+    /// A model with made-up data and no persistence, used to render README screenshots.
+    init(demoAccounts: [Account], ledgers: [UUID: UsageLedger], now: Date) {
+        accounts = demoAccounts
+        self.ledgers = ledgers
+        self.now = now
+        for account in demoAccounts { statuses[account.id] = AccountStatus(lastUpdated: now) }
+    }
+
     // MARK: - Lifecycle
 
     func start() {
