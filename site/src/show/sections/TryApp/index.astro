@@ -1,0 +1,18 @@
+---
+import PaceCard from 'Islands/PaceCard';
+import MenuBarCard from 'Islands/MenuBarCard';
+import IndexCard from 'Components/IndexCard/index.astro';
+import SectionHeading from 'Components/SectionHeading/index.astro';
+---
+
+<section class='page-sec' data-reveal id='try'>
+  <SectionHeading number='§2 · Try the app' title='Two things to play with.' />
+  <div class='grid gap-x-6 gap-y-7 pt-9 lg:grid-cols-2'>
+    <IndexCard source='will you hit the limit?' title='Pace'>
+      <PaceCard client:visible />
+    </IndexCard>
+    <IndexCard source='pick what it shows' title='Menu bar'>
+      <MenuBarCard client:visible />
+    </IndexCard>
+  </div>
+</section>

@@ -1,0 +1,106 @@
+---
+import { DEMO_ACCOUNTS } from 'Constants';
+import IndexCard from 'Components/IndexCard/index.astro';
+import SectionHeading from 'Components/SectionHeading/index.astro';
+---
+
+<section class='page-sec' data-reveal id='accounts'>
+  <SectionHeading number='§1 · Accounts' title='One card per account.' />
+  <div class='grid gap-x-6 gap-y-7 pt-9 sm:grid-cols-2'>
+    {DEMO_ACCOUNTS.map(account => (
+      <IndexCard source={account.from} title={account.label}>
+        <span class='dot' slot='lead' style={`background:${account.color}`} />
+        {account.limit === null ? (
+          <div class='meters single'>
+            <div class='meter'>
+              <span class='meter-key'>Billed today</span>
+              <span class='meter-value'>{account.cost}</span>
+              <span class='meter-bar' />
+            </div>
+          </div>
+        ) : (
+          <div class='meters'>
+            {account.windows.length > 1 ? (
+              account.windows.map(window => (
+                <div class='meter'>
+                  <span class='meter-key'>
+                    {window.title === 'This week' ? 'Week' : 'Session'}
+                  </span>
+                  <span class='meter-value' data-count={window.used}>
+                    {`${window.used}%`}
+                  </span>
+                  <span class='meter-bar'>
+                    <i style={`width:${window.used}%;background:${account.color}`} />
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div class='meter'>
+                <span class='meter-key'>Week</span>
+                <span class='meter-value' data-count={account.limit}>
+                  {`${account.limit}%`}
+                </span>
+                <span class='meter-bar'>
+                  <i style={`width:${account.limit}%;background:${account.color}`} />
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+        <p class='card-foot'>
+          {account.limit === null
+            ? 'API keys have no plan limits'
+            : account.windows[0].note}
+        </p>
+      </IndexCard>
+    ))}
+  </div>
+</section>
+
+<style>
+  .meters {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr 1fr;
+    padding-top: 14px;
+  }
+
+  .meters.single {
+    grid-template-columns: 1fr;
+  }
+
+  .meter {
+    align-items: baseline;
+    display: grid;
+    gap: 0 8px;
+    grid-template-columns: auto 1fr;
+  }
+
+  .meter-key {
+    color: var(--color-pencil);
+    font-family: var(--font-print);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .meter-value {
+    font-family: var(--font-print);
+    font-size: clamp(26px, 3vw, 30px);
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .meter-bar {
+    background: rgb(29 43 79 / 0.1);
+    grid-column: 1 / -1;
+    height: 6px;
+    margin-top: 6px;
+  }
+
+  .meter-bar i {
+    display: block;
+    height: 100%;
+  }
+</style>

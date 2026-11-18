@@ -2,8 +2,10 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore: ['site/**', '.github/workflows/site.yml']
   push:
     branches: [main]
+    paths-ignore: ['site/**', '.github/workflows/site.yml']
 
 permissions:
   contents: read

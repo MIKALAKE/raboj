@@ -1,0 +1,8 @@
+{
+  "name": "Răboj",
+  "short_name": "Răboj",
+  "icons": [{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }],
+  "theme_color": "#23402f",
+  "background_color": "#e8eedd",
+  "display": "browser"
+}

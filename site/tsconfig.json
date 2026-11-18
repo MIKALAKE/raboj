@@ -1,0 +1,33 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "Root/*": ["./*"],
+
+      "Components": ["./src/show/components"],
+      "Components/*": ["./src/show/components/*"],
+      "Docs/*": ["../docs/images/*"],
+      "Islands": ["./src/show/islands"],
+      "Islands/*": ["./src/show/islands/*"],
+      "Layouts": ["./src/show/layouts"],
+      "Layouts/*": ["./src/show/layouts/*"],
+      "Sections": ["./src/show/sections"],
+      "Sections/*": ["./src/show/sections/*"],
+      "Styles/*": ["./src/show/styles/*"],
+
+      "Constants": ["./src/process/constants"],
+      "Constants/*": ["./src/process/constants/*"],
+      "Helpers": ["./src/process/helpers"],
+      "Helpers/*": ["./src/process/helpers/*"],
+      "Hooks": ["./src/process/hooks"],
+      "Hooks/*": ["./src/process/hooks/*"]
+    }
+  }
+}

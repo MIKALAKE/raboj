@@ -1,0 +1,113 @@
+<div class='sticky top-0 grid h-screen place-items-center' aria-hidden='true'>
+  <canvas
+    class='block h-[82vh] w-[26px] md:w-[46px]'
+    data-tally-stick
+    height='1400'
+    width='92'></canvas>
+</div>
+<canvas
+  aria-hidden='true'
+  class='pointer-events-none fixed inset-0 z-[5] h-screen w-screen'
+  data-tally-chips></canvas>
+
+<script>
+  import { drawStick, notchPosition, NOTCH_COUNT, STICK_LENGTH, WOOD } from './drawing';
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stick = document.querySelector<HTMLCanvasElement>('[data-tally-stick]');
+  const chips = document.querySelector<HTMLCanvasElement>('[data-tally-chips]');
+  const ledger = document.querySelector<HTMLElement>('[data-ledger]');
+
+  type Chip = {
+    c: string;
+    life: number;
+    r: number;
+    s: number;
+    vx: number;
+    vy: number;
+    x: number;
+    y: number;
+  };
+
+  if (stick && chips && ledger) {
+    const stickContext = stick.getContext('2d');
+    const chipContext = chips.getContext('2d');
+    let particles: Chip[] = [];
+    let frame = 0;
+    let notches = -1;
+
+    const sizeChips = () => {
+      const ratio = devicePixelRatio || 1;
+      chips.width = innerWidth * ratio;
+      chips.height = innerHeight * ratio;
+      chipContext?.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+
+    const moveChip = (chip: Chip) => {
+      chip.x += chip.vx;
+      chip.y += chip.vy;
+      chip.vy += 0.25;
+      chip.r += 0.2;
+      chip.life -= 0.022;
+    };
+
+    const paintChip = (context: CanvasRenderingContext2D, chip: Chip) => {
+      context.save();
+      context.globalAlpha = Math.max(0, chip.life);
+      context.translate(chip.x, chip.y);
+      context.rotate(chip.r);
+      context.fillStyle = chip.c;
+      context.fillRect(-chip.s / 2, -chip.s / 5, chip.s, chip.s / 2.5);
+      context.restore();
+    };
+
+    const step = () => {
+      if (!chipContext) return;
+      chipContext.clearRect(0, 0, innerWidth, innerHeight);
+      particles.forEach(moveChip);
+      particles.forEach(paintChip.bind(null, chipContext));
+      particles = particles.filter(chip => chip.life > 0);
+      frame = particles.length ? requestAnimationFrame(step) : 0;
+    };
+
+    const burst = (index: number) => {
+      const rect = stick.getBoundingClientRect();
+      if (reduced || !rect.height) return;
+      const y = rect.top + (notchPosition(index) / STICK_LENGTH) * rect.height;
+      const x = rect.left + rect.width / 2;
+      for (let k = 0; k < 9; k++) {
+        particles.push({
+          c: Math.random() < 0.5 ? WOOD.light : WOOD.cutLight,
+          life: 1,
+          r: Math.random() * Math.PI,
+          s: 2 + Math.random() * 4,
+          vx: 1 + Math.random() * 3.5,
+          vy: -2 - Math.random() * 3,
+          x,
+          y,
+        });
+      }
+      if (!frame) frame = requestAnimationFrame(step);
+    };
+
+    const update = () => {
+      const rect = ledger.getBoundingClientRect();
+      const progress = Math.min(
+        1,
+        Math.max(0, (innerHeight * 0.7 - rect.top) / rect.height)
+      );
+      const next = Math.round(progress * NOTCH_COUNT);
+      if (next === notches || !stickContext) return;
+      const previous = notches;
+      notches = next;
+      drawStick(stickContext, next);
+      for (let index = Math.max(previous, 0); previous >= 0 && index < next; index++)
+        burst(index);
+    };
+
+    sizeChips();
+    update();
+    addEventListener('resize', sizeChips);
+    addEventListener('scroll', update, { passive: true });
+  }
+</script>

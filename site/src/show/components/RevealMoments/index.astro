@@ -1,0 +1,52 @@
+<script>
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const countUp = (element: HTMLElement) => {
+    const target = Number(element.dataset.count);
+    if (!target) return;
+    const suffix = (element.textContent ?? '').trim().replace(/[0-9]/g, '');
+    let start: number | null = null;
+    const step = (time: number) => {
+      start ??= time;
+      const progress = Math.min(1, (time - start) / 700);
+      element.textContent = `${Math.round(target * (1 - (1 - progress) ** 3))}${suffix}`;
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+
+  const drawTick = (tick: Element, index: number) => {
+    const path = tick.querySelector<SVGPathElement>('path');
+    if (path) path.style.animationDelay = `${index * 0.18}s`;
+    tick.classList.add('draw');
+  };
+
+  const reveal = (section: Element) => {
+    section.querySelectorAll<HTMLElement>('[data-count]').forEach(countUp);
+    section.querySelectorAll('.tick').forEach(drawTick);
+    section
+      .querySelectorAll('[data-stamp]')
+      .forEach(stamp => stamp.classList.add('thump'));
+  };
+
+  const onIntersect = (
+    observer: IntersectionObserver,
+    entries: IntersectionObserverEntry[]
+  ) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(entry.target);
+      reveal(entry.target);
+    }
+  };
+
+  if (!reduced && 'IntersectionObserver' in window) {
+    const observer: IntersectionObserver = new IntersectionObserver(
+      entries => onIntersect(observer, entries),
+      { threshold: 0.35 }
+    );
+    document
+      .querySelectorAll('[data-reveal]')
+      .forEach(section => observer.observe(section));
+  }
+</script>

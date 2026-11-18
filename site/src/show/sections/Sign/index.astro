@@ -1,0 +1,33 @@
+---
+import { AUTHOR, COFFEE_URL, GITHUB_URL, RELEASES_URL } from 'Constants';
+
+const year = new Date().getFullYear();
+---
+
+<footer class='sign'>
+  <p>
+    Kept by {AUTHOR} · Made in Romania · MIT · © {year}
+  </p>
+  <nav aria-label='Project links'>
+    <a href={RELEASES_URL}>Download</a> · <a href={GITHUB_URL}>Source</a> ·
+    <a href={COFFEE_URL}>Buy me a coffee</a>
+  </nav>
+</footer>
+
+<style>
+  .sign {
+    border-top: 2px solid var(--color-ink);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 13px;
+    gap: 8px 16px;
+    justify-content: space-between;
+    margin-top: 72px;
+    max-width: 1100px;
+    padding-top: 10px;
+  }
+
+  .sign p {
+    margin: 0;
+  }
+</style>

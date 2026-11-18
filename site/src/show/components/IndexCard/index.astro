@@ -1,0 +1,18 @@
+---
+import type { IndexCardProps } from './types';
+
+type Props = IndexCardProps;
+
+const { class: className, source, title } = Astro.props;
+---
+
+<article class:list={['index-card', className]}>
+  {title && (
+    <header class='card-head'>
+      <slot name='lead' />
+      <h3 class='card-title'>{title}</h3>
+      {source && <span class='card-src'>{source}</span>}
+    </header>
+  )}
+  <slot />
+</article>

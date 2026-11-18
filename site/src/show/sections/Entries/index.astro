@@ -1,0 +1,52 @@
+---
+import { ENTRIES } from 'Constants';
+import Tick from 'Components/Tick/index.astro';
+import IndexCard from 'Components/IndexCard/index.astro';
+import SectionHeading from 'Components/SectionHeading/index.astro';
+---
+
+<section class='page-sec' data-reveal id='features'>
+  <SectionHeading number='§3 · What it keeps' title='Entries.' />
+  <div class='grid gap-x-6 gap-y-7 pt-9 sm:grid-cols-2 xl:grid-cols-4'>
+    {ENTRIES.map(entry => (
+      <IndexCard class='entry'>
+        <Tick class='entry-tick' />
+        <p class='entry-qty'>{entry.qty}</p>
+        <h3 class='entry-label'>{entry.label}</h3>
+        <p class='card-foot'>{entry.detail}</p>
+      </IndexCard>
+    ))}
+  </div>
+</section>
+
+<style>
+  :global(.index-card.entry) {
+    padding-top: 64px;
+  }
+
+  :global(.entry-tick) {
+    height: 26px;
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    width: 26px;
+  }
+
+  .entry-qty {
+    font-family: var(--font-print);
+    font-size: clamp(26px, 2.6vw, 34px);
+    font-weight: 700;
+    line-height: 1;
+    margin: 0 0 14px;
+    white-space: nowrap;
+  }
+
+  .entry-label {
+    font-family: var(--font-print);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+  }
+</style>

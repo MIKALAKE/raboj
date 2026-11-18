@@ -1,0 +1,65 @@
+---
+import { FAQ } from 'Constants';
+import SectionHeading from 'Components/SectionHeading/index.astro';
+---
+
+<section class='page-sec' data-reveal id='faq'>
+  <SectionHeading number='§6 · Questions' title='Asked and answered.' />
+  <div class='grid gap-x-6 gap-y-5 pt-9 lg:grid-cols-2'>
+    {FAQ.map(item => (
+      <details class='index-card faq'>
+        <summary class='card-head'>
+          <h3 class='faq-q'>{item.question}</h3>
+          <span aria-hidden='true' class='faq-plus'>
+            +
+          </span>
+        </summary>
+        <p class='faq-a'>{item.answer}</p>
+      </details>
+    ))}
+  </div>
+</section>
+
+<style>
+  .faq {
+    align-self: start;
+  }
+
+  .faq summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .faq summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-q {
+    font-family: var(--font-print);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .faq-plus {
+    color: var(--color-margin);
+    font-family: var(--font-print);
+    font-size: 24px;
+    margin-left: auto;
+    transition: transform 0.2s;
+  }
+
+  .faq[open] .faq-plus {
+    transform: rotate(45deg);
+  }
+
+  .faq-a {
+    font-size: 15px;
+    line-height: 26px;
+    margin: 0;
+    padding-top: 26px;
+  }
+</style>

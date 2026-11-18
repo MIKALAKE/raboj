@@ -1,0 +1,29 @@
+name: Site
+
+on:
+  pull_request:
+    paths: ['site/**', 'docs/images/**', '.github/workflows/site.yml']
+  push:
+    branches: [main]
+    paths: ['site/**', 'docs/images/**', '.github/workflows/site.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install
+        run: corepack enable && yarn install --immutable
+      - name: Lint
+        run: yarn lint
+      - name: Type-check and build
+        run: yarn build
