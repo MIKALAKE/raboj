@@ -7,8 +7,8 @@
 class Raboj < Formula
   desc "AI usage in the macOS menu bar: every provider, every account"
   homepage "https://github.com/MIKALAKE/raboj"
-  url "https://github.com/MIKALAKE/raboj/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "a09c89333de2f338284f2ffb110037b01ee9b34e97898b848ea3d18e0ea83d06"
+  url "https://github.com/MIKALAKE/raboj/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "2646d88d7e17322194eb729091be1858545d5f1314c14f0611f65956fe96190e"
   license "MIT"
   head "https://github.com/MIKALAKE/raboj.git", branch: "main"
 
