@@ -1,0 +1,11 @@
+---
+import type { TickProps } from './types';
+
+type Props = TickProps;
+
+const { class: className } = Astro.props;
+---
+
+<svg aria-hidden='true' class:list={['tick', className]} viewBox='0 0 24 24'>
+  <path d='M4 13l5 5L20 5'></path>
+</svg>

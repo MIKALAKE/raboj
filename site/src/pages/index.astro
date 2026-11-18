@@ -1,0 +1,56 @@
+---
+import Faq from 'Sections/Faq/index.astro';
+import Sign from 'Sections/Sign/index.astro';
+import Totals from 'Sections/Totals/index.astro';
+import TryApp from 'Sections/TryApp/index.astro';
+import Entries from 'Sections/Entries/index.astro';
+import Accounts from 'Sections/Accounts/index.astro';
+import Providers from 'Sections/Providers/index.astro';
+import BaseLayout from 'Layouts/BaseLayout/index.astro';
+import LedgerScene from 'Sections/LedgerScene/index.astro';
+import TallyStick from 'Components/TallyStick/index.astro';
+import RevealMoments from 'Components/RevealMoments/index.astro';
+---
+
+<BaseLayout
+  description='Răboj is a free macOS menu bar app for your AI usage: Claude Code and Codex plan limits, tokens and API cost for every account, side by side. No telemetry.'
+  title='Răboj · Claude Code & AI usage limits in your Mac menu bar'>
+  <main>
+    <LedgerScene />
+    <div class='ledger ruled' data-ledger>
+      <div aria-hidden='true' class='margin-line relative'>
+        <TallyStick />
+      </div>
+      <div class='pages'>
+        <Accounts />
+        <TryApp />
+        <Entries />
+        <Providers />
+        <Totals />
+        <Faq />
+        <Sign />
+      </div>
+    </div>
+  </main>
+  <RevealMoments />
+</BaseLayout>
+
+<style>
+  .ledger {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .pages {
+    min-width: 0;
+    padding-block: 32px 96px;
+    padding-left: clamp(20px, 4vw, 56px);
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  @media (max-width: 820px) {
+    .ledger {
+      grid-template-columns: 42px minmax(0, 1fr);
+    }
+  }
+</style>

@@ -1,0 +1,65 @@
+---
+import archivoBold from '@fontsource/archivo-narrow/files/archivo-narrow-latin-700-normal.woff2?url';
+import courierRegular from '@fontsource/courier-prime/files/courier-prime-latin-400-normal.woff2?url';
+
+import 'Styles/global.css';
+import { FAQ, SITE_NAME } from 'Constants';
+import { structuredData } from 'Root/src/process/seo';
+
+import type { BaseLayoutProps } from './types';
+
+type Props = BaseLayoutProps;
+
+const { description, title } = Astro.props;
+const pageUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
+const imageUrl = new URL('/og.png', Astro.site ?? Astro.url).href;
+const jsonLd = JSON.stringify(
+  structuredData({ description, faq: FAQ, imageUrl, pageUrl })
+);
+---
+
+<!doctype html>
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <meta
+      content='width=device-width, initial-scale=1, viewport-fit=cover'
+      name='viewport'
+    />
+    <title>{title}</title>
+    <meta content={description} name='description' />
+    <link href={pageUrl} rel='canonical' />
+    <meta content='index, follow, max-image-preview:large' name='robots' />
+    <meta content='#23402f' name='theme-color' />
+    <meta content='light' name='color-scheme' />
+
+    <meta content='website' property='og:type' />
+    <meta content={SITE_NAME} property='og:site_name' />
+    <meta content={title} property='og:title' />
+    <meta content={description} property='og:description' />
+    <meta content={pageUrl} property='og:url' />
+    <meta content={imageUrl} property='og:image' />
+    <meta content='1200' property='og:image:width' />
+    <meta content='630' property='og:image:height' />
+    <meta
+      content='The Răboj usage ledger: every AI account, one line each'
+      property='og:image:alt'
+    />
+    <meta content='en_US' property='og:locale' />
+    <meta content='summary_large_image' name='twitter:card' />
+    <meta content={title} name='twitter:title' />
+    <meta content={description} name='twitter:description' />
+    <meta content={imageUrl} name='twitter:image' />
+
+    <link href='/favicon.svg' rel='icon' type='image/svg+xml' />
+    <link href='/favicon.ico' rel='icon' sizes='32x32' />
+    <link href='/apple-touch-icon.png' rel='apple-touch-icon' />
+    <link href='/site.webmanifest' rel='manifest' />
+    <link as='font' crossorigin href={archivoBold} rel='preload' type='font/woff2' />
+    <link as='font' crossorigin href={courierRegular} rel='preload' type='font/woff2' />
+    <script is:inline set:html={jsonLd} type='application/ld+json' />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

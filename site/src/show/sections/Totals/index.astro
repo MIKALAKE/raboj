@@ -1,0 +1,112 @@
+---
+import Tick from 'Components/Tick/index.astro';
+import Stamp from 'Components/Stamp/index.astro';
+import CopyCommand from 'Components/CopyCommand/index.astro';
+import SectionHeading from 'Components/SectionHeading/index.astro';
+import { APP_VERSION, BREW_INSTALL, RELEASES_URL, TOTALS } from 'Constants';
+---
+
+<section class='page-sec' data-reveal id='download'>
+  <SectionHeading number='§5 · Totals' title='Balance.' />
+  <div class='receipt'>
+    <p class='receipt-head'>Răboj · receipt Nº {APP_VERSION}</p>
+    <ul class='receipt-lines'>
+      {TOTALS.map(line => (
+        <li>
+          <Tick />
+          <span class='leader'>
+            <span>{line.label}</span>
+          </span>
+          <span class='qty'>{line.value}</span>
+        </li>
+      ))}
+      <li class='grand'>
+        <span></span>
+        <span class='leader'>
+          <span>Total</span>
+        </span>
+        <span class='qty'>free</span>
+      </li>
+    </ul>
+    <Stamp class='receipt-stamp' href={RELEASES_URL} label='Download · free' tilt={-9} />
+  </div>
+  <div class='mt-11'>
+    <CopyCommand command={BREW_INSTALL} />
+  </div>
+</section>
+
+<style>
+  .receipt {
+    background: var(--color-card);
+    box-shadow: 0 14px 24px -16px rgb(29 43 79 / 0.35);
+    margin-top: 36px;
+    mask:
+      linear-gradient(#000, #000) top / 100% calc(100% - 12px) no-repeat,
+      conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom /
+        20px 12px repeat-x;
+    max-width: 440px;
+    padding: 22px 24px 96px;
+    position: relative;
+    transform: rotate(-0.6deg);
+  }
+
+  .receipt-head {
+    border-bottom: 2px dashed rgb(29 43 79 / 0.35);
+    font-family: var(--font-print);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    margin: 0;
+    padding-bottom: 10px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .receipt-lines {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+  }
+
+  .receipt-lines li {
+    align-items: end;
+    display: grid;
+    font-size: 17px;
+    gap: 10px;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    height: 32px;
+  }
+
+  .receipt-lines :global(.tick) {
+    align-self: center;
+    height: 22px;
+    width: 22px;
+  }
+
+  .qty {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    padding-bottom: 1px;
+    white-space: nowrap;
+  }
+
+  .grand {
+    border-top: 2px solid var(--color-ink);
+  }
+
+  .grand .qty {
+    border-bottom: 5px double var(--color-ink);
+  }
+
+  .receipt :global(.receipt-stamp) {
+    background: rgb(251 250 244 / 0.6);
+    bottom: 26px;
+    position: absolute;
+    right: 18px;
+  }
+
+  @media (max-width: 640px) {
+    .receipt {
+      max-width: none;
+    }
+  }
+</style>

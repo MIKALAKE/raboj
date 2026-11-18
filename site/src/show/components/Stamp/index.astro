@@ -1,0 +1,15 @@
+---
+import type { StampProps } from './types';
+
+type Props = StampProps;
+
+const { class: className, href, label, tilt = -3 } = Astro.props;
+---
+
+<a
+  class:list={['stamp', className]}
+  data-stamp
+  href={href}
+  style={`--stamp-tilt: ${tilt}deg`}>
+  {label}
+</a>

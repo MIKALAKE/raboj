@@ -1,0 +1,39 @@
+---
+import type { CopyCommandProps } from './types';
+
+type Props = CopyCommandProps;
+
+const { command } = Astro.props;
+---
+
+<span class='typed-code'>
+  <code>{command}</code>
+  <button data-copy={command} type='button'>
+    copy
+  </button>
+</span>
+
+<script>
+  const selectText = (button: HTMLButtonElement) => {
+    const range = document.createRange();
+    range.selectNodeContents(button.previousElementSibling as Node);
+    const selection = getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  };
+
+  const copy = async (button: HTMLButtonElement) => {
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy ?? '');
+      button.textContent = 'copied';
+    } catch {
+      selectText(button);
+      button.textContent = 'selected';
+    }
+    setTimeout(() => (button.textContent = 'copy'), 1500);
+  };
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+    button.addEventListener('click', copy.bind(null, button));
+  }
+</script>

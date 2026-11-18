@@ -1,0 +1,10 @@
+---
+import type { SectionHeadingProps } from './types';
+
+type Props = SectionHeadingProps;
+
+const { number, title } = Astro.props;
+---
+
+<p class='sec-no'>{number}</p>
+<h2 class='sec-title'>{title}</h2>
