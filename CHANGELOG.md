@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 
 - Claude Code usage and limits are filed by the Claude account that made them, not by folder.
   Logging in to another account inside a Claude Code folder (or `CLAUDE_CONFIG_DIR`) no longer
