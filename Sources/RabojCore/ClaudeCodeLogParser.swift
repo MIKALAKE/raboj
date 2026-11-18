@@ -6,9 +6,14 @@ import Foundation
 /// `message.id` + `requestId` and the same usage, so events are keyed on that pair.
 /// Only `timestamp`, `cwd`, `requestId`, `message.id`, `message.model` and `message.usage`
 /// are decoded; message text is never read into a model.
+///
+/// Claude Code also writes a `session-owner` line before each turn with the signed-in account's
+/// `accountUuid`. Răboj uses it to tell accounts apart when one config folder is logged in to
+/// another account partway through (see `sessionOwner(line:)`).
 public enum ClaudeCodeLogParser {
     private static let assistantMarker = Data(#""type":"assistant""#.utf8)
     private static let usageMarker = Data(#""usage""#.utf8)
+    private static let ownerMarker = Data(#""type":"session-owner""#.utf8)
 
     private struct Line: Decodable {
         let type: String?
@@ -31,8 +36,34 @@ public enum ClaudeCodeLogParser {
         let cache_read_input_tokens: Int?
     }
 
+    /// The `accountUuid` of a `session-owner` line, or nil for any other line.
+    public static func sessionOwner(line: Data) -> String? {
+        guard line.range(of: ownerMarker) != nil else { return nil }
+        struct Owner: Decodable {
+            let type: String?
+            let accountUuid: String?
+        }
+        guard let owner = try? JSONDecoder().decode(Owner.self, from: line),
+              owner.type == "session-owner",
+              let id = owner.accountUuid, !id.isEmpty else { return nil }
+        return id
+    }
+
+    /// The session a log file belongs to: `<session>.jsonl`, or `<session>/subagents/<agent>.jsonl`.
+    public static func sessionID(forLogFile url: URL) -> String {
+        let components = url.pathComponents
+        if let index = components.lastIndex(of: "subagents"), index > 0 { return components[index - 1] }
+        return url.deletingPathExtension().lastPathComponent
+    }
+
+    /// The `session_id` in a status-line snapshot, used to find which account the limits belong to.
+    public static func limitsSessionID(_ data: Data) -> String? {
+        struct Snapshot: Decodable { let session_id: String? }
+        return (try? JSONDecoder().decode(Snapshot.self, from: data))?.session_id
+    }
+
     /// Parses one JSONL line. Returns nil for lines that carry no billable usage.
-    public static func parse(line: Data, fallbackProject: String? = nil) -> UsageEvent? {
+    public static func parse(line: Data, fallbackProject: String? = nil, owner: String? = nil) -> UsageEvent? {
         // Cheap byte checks first: most lines (user turns, tool results, metadata) are skipped without decoding.
         guard line.range(of: usageMarker) != nil, line.range(of: assistantMarker) != nil else { return nil }
         guard let decoded = try? JSONDecoder().decode(Line.self, from: line),
@@ -60,7 +91,8 @@ public enum ClaudeCodeLogParser {
             timestamp: timestamp,
             model: model,
             tokens: tokens,
-            project: project
+            project: project,
+            ownerID: owner
         )
     }
 

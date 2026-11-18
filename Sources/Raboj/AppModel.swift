@@ -43,6 +43,14 @@ struct MetricValue {
     var note: String
 }
 
+/// Usage found for a Claude account that no Răboj account is linked to yet
+/// (e.g. after `/login` with another account inside an existing Claude Code folder).
+struct UnlinkedClaudeAccount {
+    var ledger = UsageLedger()
+    /// Display paths of the folders it was seen in.
+    var folders: Set<String> = []
+}
+
 struct AccountStatus {
     var lastUpdated: Date?
     var error: String?
@@ -55,6 +63,7 @@ private struct StoredState: Codable {
     var period: Period = .today
     var menuBarMode: MenuBarMode = .selection
     var allMetric: AllMetric? = .auto
+    var ignoredClaudeIDs: Set<String>? = []
 }
 
 /// Owns accounts, reads their usage on a schedule and exposes everything the UI shows.
@@ -69,6 +78,10 @@ final class AppModel: ObservableObject {
     @Published var period: Period = .today { didSet { save() } }
     @Published var menuBarMode: MenuBarMode = .selection { didSet { save() } }
     @Published var allMetric: AllMetric = .auto { didSet { save() } }
+    /// Claude accounts seen in a folder that aren't linked to any Răboj account, by `accountUuid`.
+    @Published private(set) var unlinkedClaude: [String: UnlinkedClaudeAccount] = [:]
+    /// Claude accounts the user chose not to add; their usage is dropped.
+    private var ignoredClaudeIDs: Set<String> = []
 
     private var readers: [UUID: FolderReader] = [:]
     private var lastAPIFetch: [UUID: Date] = [:]
@@ -129,6 +142,10 @@ final class AppModel: ObservableObject {
         switch account.provider.connection {
         case .folder:
             guard let reader = readers[account.id] else {
+                if isFolderless(account) {
+                    statuses[account.id, default: AccountStatus()].lastUpdated = Date()
+                    return
+                }
                 statuses[account.id, default: AccountStatus()].error = "No access to the folder. Choose it again in Settings."
                 return
             }
@@ -146,19 +163,124 @@ final class AppModel: ObservableObject {
     }
 
     private func apply(_ result: ReadResult, to id: UUID) {
-        guard accounts.contains(where: { $0.id == id }) else { return }
+        guard let account = account(id) else { return }
         var status = statuses[id] ?? AccountStatus()
         status.loading = false
         status.error = result.error
         if result.error == nil { status.lastUpdated = Date() }
         statuses[id] = status
+        if account.provider == .claudeCode {
+            routeClaude(result, from: account)
+            return
+        }
         guard !result.events.isEmpty || result.plan != nil || result.info != nil || ledgers[id] == nil else { return }
+        absorb(result.events, plan: result.plan, info: result.info, into: id)
+    }
+
+    private func absorb(_ events: [UsageEvent], plan: PlanSnapshot?, info: [InfoItem]? = nil, into id: UUID) {
         var ledger = ledgers[id] ?? UsageLedger()
-        ledger.merge(result.events)
-        ledger.offer(plan: result.plan)
-        if let info = result.info { ledger.info = info }
+        ledger.merge(events)
+        ledger.offer(plan: plan)
+        if let info { ledger.info = info }
         ledger.prune(before: Date().addingTimeInterval(-FolderReader.retention))
         ledgers[id] = ledger
+    }
+
+    // MARK: - Claude account identity
+
+    /// Where a Claude Code event or plan snapshot belongs.
+    private enum ClaudeDestination: Hashable {
+        case account(UUID)
+        case unlinked(String)
+        case ignored
+    }
+
+    /// Files a Claude Code folder's usage under the Răboj account linked to the Claude account that made it,
+    /// so a folder logged in to another account partway through doesn't mix the two.
+    private func routeClaude(_ result: ReadResult, from source: Account) {
+        var source = source
+        if source.claudeAccountID == nil, let home = homeClaudeID(in: result.events, excluding: source.id) {
+            source.claudeAccountID = home
+            replace(source)
+            if let pending = unlinkedClaude.removeValue(forKey: home) {
+                absorb(Array(pending.ledger.events.values), plan: pending.ledger.plan, into: source.id)
+            }
+        }
+        if ledgers[source.id] == nil { ledgers[source.id] = UsageLedger() }
+
+        var buckets: [ClaudeDestination: [UsageEvent]] = [:]
+        for event in result.events { buckets[destination(for: event.ownerID, source: source), default: []].append(event) }
+        let planDestination = result.plan.map { destination(for: $0.ownerID, source: source) }
+        for target in Set(buckets.keys).union(planDestination.map { [$0] } ?? []) {
+            let events = buckets[target] ?? []
+            let plan = planDestination == target ? result.plan : nil
+            switch target {
+            case .account(let id):
+                absorb(events, plan: plan, into: id)
+            case .unlinked(let owner):
+                var pending = unlinkedClaude[owner] ?? UnlinkedClaudeAccount()
+                pending.ledger.merge(events)
+                pending.ledger.offer(plan: plan)
+                pending.ledger.prune(before: Date().addingTimeInterval(-FolderReader.retention))
+                if let path = source.folderPath { pending.folders.insert(FolderAccess.displayPath(path)) }
+                unlinkedClaude[owner] = pending
+            case .ignored:
+                break
+            }
+        }
+    }
+
+    private func destination(for owner: String?, source: Account) -> ClaudeDestination {
+        guard let owner, owner != source.claudeAccountID else { return .account(source.id) }
+        if let linked = accounts.first(where: { $0.provider == .claudeCode && $0.claudeAccountID == owner }) { return .account(linked.id) }
+        if source.claudeAccountID == nil { return .account(source.id) }
+        if ignoredClaudeIDs.contains(owner) { return .ignored }
+        return .unlinked(owner)
+    }
+
+    /// The Claude account a folder was set up for: the first one seen in its logs, skipping ones already linked elsewhere.
+    /// Not the most used one: a folder logged in to another account for a few busy days can have more of its usage.
+    private func homeClaudeID(in events: [UsageEvent], excluding id: UUID) -> String? {
+        let taken = Set(accounts.filter { $0.id != id }.compactMap(\.claudeAccountID))
+        return events
+            .filter { $0.ownerID.map { !taken.contains($0) } ?? false }
+            .min { $0.timestamp < $1.timestamp }?
+            .ownerID
+    }
+
+    /// Adds a Răboj account for a Claude account found in another account's folder.
+    /// It needs no folder of its own: its usage comes from whichever folder it was used in.
+    func addUnlinkedClaude(_ owner: String) {
+        guard let pending = unlinkedClaude.removeValue(forKey: owner) else { return }
+        let count = accounts.filter { $0.provider == .claudeCode }.count + 1
+        let account = Account(provider: .claudeCode, label: "Claude \(count)", color: nextColor, claudeAccountID: owner)
+        accounts.append(account)
+        ledgers[account.id] = pending.ledger
+        statuses[account.id] = AccountStatus(lastUpdated: Date())
+        save()
+        selection = .account(account.id)
+    }
+
+    /// Stops showing a Claude account found in another account's folder; its usage is ignored from now on.
+    func ignoreUnlinkedClaude(_ owner: String) {
+        unlinkedClaude[owner] = nil
+        ignoredClaudeIDs.insert(owner)
+        save()
+    }
+
+    /// Reads every Claude Code folder again from the start, after links between folders and accounts changed.
+    private func rereadClaudeFolders() {
+        unlinkedClaude.removeAll()
+        for account in accounts where account.provider == .claudeCode {
+            ledgers[account.id] = nil
+            prepare(account)
+        }
+        for account in accounts where account.provider == .claudeCode { refresh(account, force: true) }
+    }
+
+    /// True for a Claude account added from another folder: it has no folder of its own.
+    func isFolderless(_ account: Account) -> Bool {
+        account.provider == .claudeCode && account.claudeAccountID != nil && account.folderBookmark == nil && account.folderPath == nil
     }
 
     private func fetchAPI(_ account: Account) {
@@ -244,11 +366,18 @@ final class AppModel: ObservableObject {
     /// Saves edits to an account (label, color, toggles, refresh interval).
     func update(_ account: Account) {
         guard let index = accounts.firstIndex(where: { $0.id == account.id }) else { return }
+        var account = account
+        // The settings form may hold a copy made before the Claude account was detected.
+        account.claudeAccountID = accounts[index].claudeAccountID
         let folderChanged = accounts[index].folderBookmark != account.folderBookmark || accounts[index].folderPath != account.folderPath
         let sourceChanged = accounts[index].extraID != account.extraID
         accounts[index] = account
         save()
-        if folderChanged {
+        if folderChanged, account.provider == .claudeCode {
+            accounts[index].claudeAccountID = nil
+            save()
+            rereadClaudeFolders()
+        } else if folderChanged {
             ledgers[account.id] = nil
             prepare(account)
             refresh(account, force: true)
@@ -273,6 +402,7 @@ final class AppModel: ObservableObject {
     }
 
     func remove(_ id: UUID) {
+        let wasClaude = account(id)?.provider == .claudeCode
         Keychain.delete(id)
         apiTasks[id]?.cancel()
         readers[id] = nil
@@ -283,6 +413,8 @@ final class AppModel: ObservableObject {
         accounts.removeAll { $0.id == id }
         if selection == .account(id) { selection = .all }
         save()
+        // Other folders may hold usage that was filed under the removed account.
+        if wasClaude { rereadClaudeFolders() }
     }
 
     func move(from source: IndexSet, to destination: Int) {
@@ -388,12 +520,13 @@ final class AppModel: ObservableObject {
         period = state.period
         menuBarMode = state.menuBarMode
         allMetric = state.allMetric ?? .auto
+        ignoredClaudeIDs = state.ignoredClaudeIDs ?? []
         if case .account(let id) = selection, account(id) == nil { selection = .all }
     }
 
     private func save() {
         guard loaded else { return }
-        let state = StoredState(accounts: accounts, selection: selection, period: period, menuBarMode: menuBarMode, allMetric: allMetric)
+        let state = StoredState(accounts: accounts, selection: selection, period: period, menuBarMode: menuBarMode, allMetric: allMetric, ignoredClaudeIDs: ignoredClaudeIDs)
         do {
             try FileManager.default.createDirectory(at: Self.stateURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(state).write(to: Self.stateURL, options: .atomic)

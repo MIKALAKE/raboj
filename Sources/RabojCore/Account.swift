@@ -194,6 +194,10 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
     public var extraID: String?
     /// A color picked freely (0xRRGGBB); overrides `color` when set.
     public var customColorHex: UInt32?
+    /// The Claude account (`accountUuid` from Claude Code's logs) this Răboj account stands for.
+    /// Detected automatically; only the opaque ID is kept, never an email or name.
+    /// Usage is filed by this ID, so it lands here whichever folder (or `CLAUDE_CONFIG_DIR`) it was made in.
+    public var claudeAccountID: String?
 
     public init(
         id: UUID = UUID(),
@@ -205,7 +209,8 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         includeInAll: Bool = true,
         pinnedInMenuBar: Bool = false,
         refreshMinutes: Int = 15,
-        extraID: String? = nil
+        extraID: String? = nil,
+        claudeAccountID: String? = nil
     ) {
         self.id = id
         self.provider = provider
@@ -217,6 +222,7 @@ public struct Account: Identifiable, Codable, Hashable, Sendable {
         self.pinnedInMenuBar = pinnedInMenuBar
         self.refreshMinutes = refreshMinutes
         self.extraID = extraID
+        self.claudeAccountID = claudeAccountID
     }
 }
 
