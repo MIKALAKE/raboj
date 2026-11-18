@@ -140,3 +140,32 @@ private func line(_ string: String) -> Data { Data(string.utf8) }
         #expect(!called)
     }
 }
+
+@Suite struct ClaudeAccountIdentityTests {
+    @Test func readsSessionOwnerLines() {
+        let owner = #"{"type":"session-owner","accountUuid":"acc-1","organizationUuid":"org-1","sessionId":"s1"}"#
+        #expect(ClaudeCodeLogParser.sessionOwner(line: line(owner)) == "acc-1")
+        // Other lines that mention an account are not owner lines.
+        let ledger = #"{"type":"artifact-autoreact-ledger","accountUuid":"acc-2","sessionId":"s1"}"#
+        #expect(ClaudeCodeLogParser.sessionOwner(line: line(ledger)) == nil)
+        #expect(ClaudeCodeLogParser.sessionOwner(line: line(#"{"type":"session-owner","accountUuid":""}"#)) == nil)
+    }
+
+    @Test func tagsEventsWithTheirOwner() throws {
+        let assistant = #"{"type":"assistant","timestamp":"2026-11-07T20:20:53Z","requestId":"r","message":{"id":"m","model":"claude-opus-5-5","usage":{"input_tokens":1,"output_tokens":1}}}"#
+        let event = try #require(ClaudeCodeLogParser.parse(line: line(assistant), owner: "acc-1"))
+        #expect(event.ownerID == "acc-1")
+    }
+
+    @Test func findsTheSessionOfMainAndSubagentLogs() {
+        let main = URL(fileURLWithPath: "/x/projects/-Users-x-app/abc-123.jsonl")
+        let subagent = URL(fileURLWithPath: "/x/projects/-Users-x-app/abc-123/subagents/agent-9.jsonl")
+        #expect(ClaudeCodeLogParser.sessionID(forLogFile: main) == "abc-123")
+        #expect(ClaudeCodeLogParser.sessionID(forLogFile: subagent) == "abc-123")
+    }
+
+    @Test func readsTheSessionOfALimitsSnapshot() {
+        let snapshot = #"{"session_id":"abc-123","rate_limits":{"seven_day":{"used_percentage":14,"resets_at":1794082853}}}"#
+        #expect(ClaudeCodeLogParser.limitsSessionID(line(snapshot)) == "abc-123")
+    }
+}

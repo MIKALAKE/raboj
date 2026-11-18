@@ -10,6 +10,9 @@ struct PopoverView: View {
             if model.accounts.isEmpty {
                 EmptyStateView()
             } else {
+                ForEach(model.unlinkedClaude.keys.sorted(), id: \.self) { owner in
+                    UnlinkedClaudeBanner(owner: owner)
+                }
                 AccountSwitcher()
                 switch model.selection {
                 case .all:
@@ -56,6 +59,32 @@ struct PopoverView: View {
         let dates = model.accounts.compactMap { model.status($0.id).lastUpdated }
         guard let latest = dates.max() else { return "Not updated yet" }
         return "Updated " + latest.formatted(date: .omitted, time: .shortened)
+    }
+}
+
+/// Shown when a Claude Code folder was used with a Claude account Răboj doesn't know yet,
+/// e.g. after `/login` with the personal account inside the work folder.
+private struct UnlinkedClaudeBanner: View {
+    @EnvironmentObject private var model: AppModel
+    let owner: String
+
+    var body: some View {
+        let folders = model.unlinkedClaude[owner]?.folders.sorted().joined(separator: ", ") ?? ""
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Another Claude account was used in \(folders.isEmpty ? "a folder" : folders)", systemImage: "person.crop.circle.badge.questionmark")
+                .font(.callout.weight(.semibold))
+            Text("Its usage and limits are kept apart from that folder’s account. Add it to see them on their own.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Add Account") { model.addUnlinkedClaude(owner) }.buttonStyle(.borderedProminent).controlSize(.small)
+                Button("Ignore") { model.ignoreUnlinkedClaude(owner) }.buttonStyle(.borderless).controlSize(.small)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.orange.opacity(0.12)))
     }
 }
 

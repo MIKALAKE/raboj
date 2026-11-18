@@ -141,9 +141,12 @@ private struct AccountEditor: View {
 
             switch account.provider.connection {
             case .folder:
-                Section("Source") {
+                Section {
                     LabeledContent("Folder") {
-                        Text(account.folderPath.map(FolderAccess.displayPath) ?? "—").font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                        Text(account.folderPath.map(FolderAccess.displayPath) ?? (model.isFolderless(account) ? "Any Claude Code folder" : "—")).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                    }
+                    if account.provider == .claudeCode {
+                        LabeledContent("Claude account", value: account.claudeAccountID == nil ? "Not detected yet" : "Detected from the logs")
                     }
                     Button("Choose Another Folder…") {
                         if let chosen = FolderAccess.choose(for: account.provider) {
@@ -152,6 +155,12 @@ private struct AccountEditor: View {
                         }
                     }
                     LabeledContent("Network", value: "None: read from local files")
+                } header: {
+                    Text("Source")
+                } footer: {
+                    if account.provider == .claudeCode {
+                        Text("Usage is filed by the Claude account that made it, not by folder. If you log in to another account inside this folder, that usage goes to the other account’s card.")
+                    }
                 }
                 if account.provider == .claudeCode { claudeLimitsSection }
             case .apiKey:

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Claude Code usage and limits are filed by the Claude account that made them, not by folder.
+  Logging in to another account inside a Claude Code folder (or `CLAUDE_CONFIG_DIR`) no longer
+  shows that account's usage and limits on the folder's card. A Claude account Răboj doesn't know
+  yet shows a prompt to add it or ignore it.
+
 ## 0.1.0
 
 First public release.

@@ -25,6 +25,12 @@ enum Report {
             let change = summary.change.map { " (\(Format.change($0)) vs \(summary.changeBaseline))" } ?? ""
             print("\(period.title.padding(toLength: 8, withPad: " ", startingAt: 0)) \(Format.tokens(t.total)) tokens\(change) · in \(Format.tokens(t.input)) out \(Format.tokens(t.output)) cache-w \(Format.tokens(t.cacheWrite)) cache-r \(Format.tokens(t.cacheRead))")
         }
+        if provider == .claudeCode {
+            // Which Claude accounts made this folder's usage (IDs shortened; see Account.claudeAccountID).
+            var byOwner: [String: Int] = [:]
+            for event in ledger.events.values { byOwner[event.ownerID.map { String($0.prefix(8)) } ?? "unknown", default: 0] += 1 }
+            print("claude accounts: " + byOwner.sorted { $0.value > $1.value }.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+        }
         let month = ledger.summary(.month, now: now)
         print("models (30d): " + month.byModel.prefix(4).map { "\($0.name) \(Format.percent($0.share * 100))" }.joined(separator: ", "))
         if let window = ledger.currentWindow(now: now) {
@@ -33,7 +39,7 @@ enum Report {
         if let plan = ledger.plan {
             for window in plan.windows {
                 let reset = window.resetsAt.map { " · resets in \(Format.countdown(to: $0, now: now))" } ?? ""
-                print("plan: \(window.title) \(Format.percent(window.usedPercent)) used\(reset) (\(plan.source), captured \(plan.capturedAt.formatted()))")
+                print("plan: \(window.title) \(Format.percent(window.usedPercent)) used\(reset) (\(plan.source), captured \(plan.capturedAt.formatted()), account \(plan.ownerID.map { String($0.prefix(8)) } ?? "unknown"))")
             }
         }
     }

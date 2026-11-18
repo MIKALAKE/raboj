@@ -22,6 +22,10 @@ final class FolderReader {
     private let tailer = JSONLTailer()
     private var codexParsers: [String: CodexSessionParser] = [:]
     private var limitsModified: Date?
+    /// Claude Code: the account signed in at the current end of each log file (by path).
+    private var fileOwners: [String: String] = [:]
+    /// Claude Code: the latest account seen for each session, for subagent logs and plan limits.
+    private var sessionOwners: [String: String] = [:]
 
     init(provider: Provider, root: URL, accessing: Bool) {
         self.provider = provider
@@ -65,12 +69,23 @@ final class FolderReader {
             return result
         }
         let cutoff = Date().addingTimeInterval(-Self.retention)
+        // Claude Code events read before any owner line in their file (e.g. subagent logs), with their session.
+        var unowned: [(index: Int, session: String)] = []
         tailer.readNew(under: logs, cutoff: cutoff) { url, firstRead, chunk in
             switch provider {
             case .claudeCode:
                 let fallback = url.deletingLastPathComponent().lastPathComponent
+                let path = url.path
+                let session = ClaudeCodeLogParser.sessionID(forLogFile: url)
+                if firstRead { fileOwners[path] = nil }
                 chunk.forEachCompleteLine { line in
-                    if let event = ClaudeCodeLogParser.parse(line: line, fallbackProject: fallback) { result.events.append(event) }
+                    if let owner = ClaudeCodeLogParser.sessionOwner(line: line) {
+                        fileOwners[path] = owner
+                        sessionOwners[session] = owner
+                    } else if let event = ClaudeCodeLogParser.parse(line: line, fallbackProject: fallback, owner: fileOwners[path]) {
+                        if event.ownerID == nil { unowned.append((result.events.count, session)) }
+                        result.events.append(event)
+                    }
                 }
             case .codex:
                 if firstRead || codexParsers[url.path] == nil {
@@ -91,7 +106,10 @@ final class FolderReader {
                 break
             }
         }
-        if provider == .claudeCode { readClaudeLimits(into: &result) }
+        if provider == .claudeCode {
+            for (index, session) in unowned { result.events[index].ownerID = sessionOwners[session] }
+            readClaudeLimits(into: &result)
+        }
         return result
     }
 
@@ -102,5 +120,7 @@ final class FolderReader {
               let data = try? Data(contentsOf: file) else { return }
         limitsModified = modified
         result.plan = ClaudeCodeLogParser.parseLimits(data, capturedAt: modified)
+        // The status line runs inside a session; its owner is the account these limits belong to.
+        if let session = ClaudeCodeLogParser.limitsSessionID(data) { result.plan?.ownerID = sessionOwners[session] }
     }
 }

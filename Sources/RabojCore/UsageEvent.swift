@@ -44,8 +44,11 @@ public struct UsageEvent: Hashable, Sendable {
     public var project: String?
     /// Requests counted by the provider (e.g. Copilot premium requests), when it counts requests instead of tokens.
     public var requests: Int
+    /// The Claude account (`accountUuid`) that made the request, when the log says so.
+    /// Lets Răboj file usage under the right account even when a folder was signed in to another one.
+    public var ownerID: String?
 
-    public init(key: String, timestamp: Date, model: String, tokens: TokenCounts, costUSD: Double? = nil, project: String? = nil, requests: Int = 0) {
+    public init(key: String, timestamp: Date, model: String, tokens: TokenCounts, costUSD: Double? = nil, project: String? = nil, requests: Int = 0, ownerID: String? = nil) {
         self.key = key
         self.timestamp = timestamp
         self.model = model
@@ -53,6 +56,7 @@ public struct UsageEvent: Hashable, Sendable {
         self.costUSD = costUSD
         self.project = project
         self.requests = requests
+        self.ownerID = ownerID
     }
 }
 
@@ -119,11 +123,14 @@ public struct PlanSnapshot: Hashable, Sendable {
     public var capturedAt: Date
     /// Where the numbers came from, shown to the user (e.g. "from Codex's own logs").
     public var source: String
+    /// The Claude account (`accountUuid`) these limits belong to, when known.
+    public var ownerID: String?
 
-    public init(windows: [PlanWindow], capturedAt: Date, source: String) {
+    public init(windows: [PlanWindow], capturedAt: Date, source: String, ownerID: String? = nil) {
         self.windows = windows
         self.capturedAt = capturedAt
         self.source = source
+        self.ownerID = ownerID
     }
 
     /// Windows that have not reset yet; a window past its reset time no longer describes the present.
